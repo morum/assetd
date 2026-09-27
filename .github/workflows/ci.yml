@@ -1,0 +1,62 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  # The optional CUDA download of onnxruntime-node is never needed.
+  ONNXRUNTIME_NODE_INSTALL: skip
+
+jobs:
+  test:
+    name: unit (${{ matrix.os }}, node ${{ matrix.node }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: [22.x, 24.x]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  model:
+    name: model integration (${{ matrix.os }})
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      ASSETD_MODEL_DIR: ${{ github.workspace }}/.model-cache
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: npm
+      - uses: actions/cache@v4
+        with:
+          path: .model-cache
+          key: assetd-models-siglip-base-q8-v1
+      - run: npm ci
+      - run: npm run build
+      - run: npm run test:model
+      # End-to-end smoke test through the built binary, same commands on both OSes.
+      - run: node dist/cli/main.js index test/fixtures --json
+      - run: node dist/cli/main.js status --json
+      - run: node dist/cli/main.js search "a red circle" --limit 3 --json
+      - run: node dist/cli/main.js similar "test/fixtures/red circle.png" --json
+      - run: node dist/cli/main.js inspect test\fixtures\blue_square.png --json
+        if: runner.os == 'Windows'
+      - run: node dist/cli/main.js contact-sheet --search "shape" --limit 4 --json

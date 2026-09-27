@@ -1,0 +1,53 @@
+{
+  "name": "assetd",
+  "version": "0.1.0",
+  "description": "Local-first semantic index and search over project assets, built for AI coding agents and humans.",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && vitest run --project unit",
+    "test:model": "vitest run --project model",
+    "dev": "node --experimental-strip-types src/cli/main.ts",
+    "assetd": "node dist/cli/main.js",
+    "test:unit": "vitest run --project unit"
+  },
+  "type": "module",
+  "dependencies": {
+    "@huggingface/transformers": "^4.3.0",
+    "ignore": "^7.0.9",
+    "sharp": "^0.35.4",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.1"
+  },
+  "allowScripts": {
+    "onnxruntime-node": false,
+    "protobufjs": false
+  },
+  "bin": {
+    "assetd": "dist/cli/main.js"
+  },
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "skills",
+    "docs",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "private": true,
+  "keywords": [
+    "assets",
+    "semantic-search",
+    "siglip",
+    "gamedev",
+    "cli",
+    "ai-agents"
+  ]
+}
