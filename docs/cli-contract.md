@@ -113,6 +113,15 @@ search below (`type` is that kind). If several kinds have assets, `type` is
 Audio results carry `metadata` such as `durationSeconds`, `channels`,
 `sampleRate`, `format`, `bitrateKbps` (average), `peakDb`, `rmsDb`.
 
+3D models (`kind: "model3d"`: GLB, glTF, OBJ) carry `format`, `vertexCount`,
+`triangleCount`, `meshCount`, `nodeCount`, `materials`, `textures`
+(`uri`, `embedded`, `missing`), `boundingBox` (`min`/`max`, world space),
+`dimensions`, `hasAnimations`, `animations` (`name`, `durationSeconds`),
+`hasSkeleton`, `jointCount`, `hasMorphTargets`, `hasVertexColors`, `units`
+(`"meters"` for glTF, `null` for OBJ), `upAxis`, `generator`, `extensionsUsed`
+and `missingResources` (referenced files not found; a missing texture does not
+fail the model, a missing geometry buffer does). Lists are capped at 50.
+
 ### `assetd similar <path> [--limit 10] [--in <dir>]`
 
 `<path>` may be an indexed asset, an unindexed file in the project, or any image

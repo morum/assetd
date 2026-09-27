@@ -28,8 +28,9 @@ assetd status
 
 This release indexes **images** (PNG, JPEG, WebP, GIF, TIFF, AVIF, SVG) with
 SigLIP and **sounds** (WAV, OGG, MP3, FLAC, Opus, M4A, AIFF) with CLAP, decoded
-by bundled WASM decoders (no FFmpeg). 3D models, text and video are planned as
-separate processors.
+by bundled WASM decoders (no FFmpeg). 3D models (GLB, glTF with Draco/meshopt,
+OBJ+MTL) are indexed with their metadata (geometry, materials, textures,
+bounds, animations, skeleton). Text and video are planned as separate processors.
 
 ## Install
 

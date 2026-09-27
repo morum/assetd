@@ -76,7 +76,7 @@ export async function inspectCommand(out: Output, args: { path: string }): Promi
       else if (record.state === "failed") doc.state = "failed";
       else if (stat && (stat.size !== record.size || stat.mtimeMs !== record.modifiedAtMs)) doc.state = "stale";
       else if (processor && processor.version !== record.processorVersion) doc.state = "stale";
-      else if (!doc.embeddings.some((e) => e.current)) doc.state = "stale";
+      else if ((processor?.channels.length ?? 0) > 0 && !doc.embeddings.some((e) => e.current)) doc.state = "stale";
       else doc.state = "indexed";
     } else if (!processor) {
       doc.state = "unsupported";
@@ -114,6 +114,18 @@ export async function inspectCommand(out: Output, args: { path: string }): Promi
         lines.push(`Duration:   ${m.durationSeconds.toFixed(3)} s`);
         lines.push(`Audio:      ${String(m.channels)} ch, ${String(m.sampleRate)} Hz, ~${String(m.bitrateKbps)} kbps`);
         lines.push(`Levels:     peak ${m.peakDb ?? "-∞"} dBFS, RMS ${m.rmsDb ?? "-∞"} dBFS`);
+      }
+      if (typeof m.triangleCount === "number") {
+        const dims = Array.isArray(m.dimensions) ? (m.dimensions as number[]).map((v) => v.toFixed(3)).join(" x ") : "-";
+        lines.push(`Geometry:   ${String(m.triangleCount)} triangles, ${String(m.vertexCount)} vertices, ${String(m.meshCount)} meshes`);
+        lines.push(`Size (xyz): ${dims}${m.units ? ` ${String(m.units)}` : ""}${m.upAxis ? `, ${String(m.upAxis)} up` : ""}`);
+        const mats = (m.materials as string[] | undefined) ?? [];
+        lines.push(`Materials:  ${mats.length ? mats.slice(0, 8).join(", ") : "-"}${mats.length > 8 ? ", ..." : ""}  (${String(m.textureCount)} textures)`);
+        const anims = (m.animations as { name: string; durationSeconds: number }[] | undefined) ?? [];
+        if (anims.length) lines.push(`Animations: ${anims.slice(0, 8).map((a) => `${a.name} (${a.durationSeconds}s)`).join(", ")}`);
+        if (m.hasSkeleton) lines.push(`Skeleton:   ${String(m.jointCount)} joints`);
+        const missingRes = (m.missingResources as string[] | undefined) ?? [];
+        if (missingRes.length) lines.push(`Missing:    ${missingRes.join(", ")}`);
       }
       if (doc.processor) lines.push(`Processor:  ${doc.processor.id}@${doc.processor.version}`);
       for (const e of doc.embeddings) lines.push(`Embedding:  ${e.space} (${e.dimensions}d)${e.current ? "" : " [not current]"}`);

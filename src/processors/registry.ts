@@ -2,6 +2,7 @@ import type { AssetdConfig } from "../core/config.ts";
 import type { FileInfo } from "../core/types.ts";
 import { AudioProcessor } from "./audio/audio-processor.ts";
 import { ImageProcessor } from "./image/image-processor.ts";
+import { Model3DProcessor } from "./model3d/model3d-processor.ts";
 import type { AssetProcessor } from "./types.ts";
 
 export class ProcessorRegistry {
@@ -33,7 +34,7 @@ export class ProcessorRegistry {
 }
 
 /**
- * Processors enabled by configuration. Image and audio exist in this release;
+ * Processors enabled by configuration. Image, audio and 3D exist in this release;
  * other kinds are accepted in config for forward compatibility and reported
  * as unavailable.
  */
@@ -41,11 +42,12 @@ export function createProcessorRegistry(config: AssetdConfig): ProcessorRegistry
   const registry = new ProcessorRegistry();
   if (config.processors.image) registry.register(new ImageProcessor());
   if (config.processors.audio) registry.register(new AudioProcessor());
+  if (config.processors.model3d) registry.register(new Model3DProcessor());
   return registry;
 }
 
 export function unavailableProcessors(config: AssetdConfig): string[] {
-  const { image: _image, audio: _audio, ...rest } = config.processors;
+  const { image: _image, audio: _audio, model3d: _model3d, ...rest } = config.processors;
   return Object.entries(rest)
     .filter(([, enabled]) => enabled)
     .map(([name]) => name);

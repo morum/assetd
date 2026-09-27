@@ -72,6 +72,17 @@ memory; very long music files cost memory proportional to their length.
 The audio model is created lazily: an image-only project never downloads it,
 and a text search skips any kind with no indexed assets.
 
+### 3D models
+
+GLB/glTF are read with `@gltf-transform/core` (pure JS) plus the Draco and
+meshopt WASM decoders; OBJ/MTL with a small built-in parser. assetd reads the
+container and external files itself, so a missing texture becomes a
+`missingResources` entry (with a placeholder) instead of failing the model.
+Both loaders produce the same format-neutral scene (world-space triangles, UVs,
+vertex colors, base color and texture per primitive): metadata is derived from
+it, and preview rendering will draw it. Changes to a model's external
+`.bin`/texture files are not tracked yet: re-index after editing only those.
+
 ### Searching several kinds
 
 Each kind is scored in its own space (images: SigLIP, sounds: CLAP). With

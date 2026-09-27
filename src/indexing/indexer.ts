@@ -207,14 +207,15 @@ export async function runIndex(opts: IndexRunOptions): Promise<IndexStats> {
     const contentHash = hashBuffer(data);
     const current = { ...file, size: data.byteLength };
     const prev = existing.get(file.logicalPath);
-    const embedded = complete(contentHash, processor);
+    // Processors without embedding channels have nothing to reuse.
+    const embedded = processor.channels.length > 0 && complete(contentHash, processor);
     if (
       prev &&
       prev.contentHash === contentHash &&
       prev.state === "indexed" &&
       prev.processorId === processor.id &&
       prev.processorVersion === processor.version &&
-      embedded
+      complete(contentHash, processor)
     ) {
       return { file: current, processor, touchOnly: true };
     }

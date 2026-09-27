@@ -15,9 +15,13 @@
   },
   "type": "module",
   "dependencies": {
+    "@gltf-transform/core": "^4.5.0",
+    "@gltf-transform/extensions": "^4.5.0",
     "@huggingface/transformers": "^4.3.0",
     "audio-decode": "^3.12.0",
+    "draco3dgltf": "^1.5.7",
     "ignore": "^7.0.9",
+    "meshoptimizer": "^1.2.0",
     "sharp": "^0.35.4",
     "zod": "^4.6.5"
   },

@@ -9,7 +9,7 @@ const processorsSchema = z
   .object({
     image: z.boolean().default(true),
     audio: z.boolean().default(true),
-    model3d: z.boolean().default(false),
+    model3d: z.boolean().default(true),
     video: z.boolean().default(false),
     text: z.boolean().default(false),
   })
@@ -40,7 +40,7 @@ export const configSchema = z
     defaultIgnores: z.boolean().default(true),
     /** Files larger than this are recorded as failed instead of being decoded. */
     maxFileSizeMb: z.number().positive().default(256),
-    processors: processorsSchema.default({ image: true, audio: true, model3d: false, video: false, text: false }),
+    processors: processorsSchema.default({ image: true, audio: true, model3d: true, video: false, text: false }),
     models: modelsSchema.default({ visual: "siglip-base", audio: "clap-general" }),
   })
   .strict();
