@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { normalizeLogicalInput, toLogicalPath, toNativePath } from "../core/paths.ts";
+import { normalizeLogicalInput, pathMatchKey, toLogicalPath, toNativePath } from "../core/paths.ts";
 import type { Project } from "../core/project.ts";
 import { resolveVisualModel } from "../embeddings/presets.ts";
 import { createVisualProvider } from "../embeddings/registry.ts";
@@ -73,6 +73,22 @@ function isFile(p: string): boolean {
 }
 
 /**
+ * On case-insensitive filesystems (Windows) a path typed as "ASSETS/A.PNG"
+ * opens "assets/a.png"; the identity must use the on-disk spelling. Both sides
+ * are canonicalized with realpath, and the result is only used when it names
+ * the same logical path (so symlinked files keep their own name).
+ */
+function onDiskSpelling(projectRoot: string, absolute: string, logical: string): string {
+  try {
+    const real = toLogicalPath(fs.realpathSync.native(projectRoot), fs.realpathSync.native(absolute));
+    if (real !== null && pathMatchKey(real) === pathMatchKey(logical)) return real;
+  } catch {
+    // Fall back to the spelling we were given.
+  }
+  return logical;
+}
+
+/**
  * Resolves a user/agent-supplied path. Accepted forms: relative to the cwd,
  * absolute, or project-relative logical ("assets/a.png", either separator).
  * Falls back to a case/Unicode-insensitive index lookup.
@@ -83,11 +99,11 @@ export function resolveAssetInput(project: Project, cwd: string, rawInput: strin
   const input = path.sep === "/" && rawInput.includes("\\") && !isFile(path.resolve(cwd, rawInput)) ? rawInput.replace(/\\/g, "/") : rawInput;
   const absolute = path.resolve(cwd, input);
   const fromCwd = toLogicalPath(project.root, absolute);
-  if (fromCwd !== null && isFile(absolute)) return { logical: fromCwd, native: absolute, exists: true };
+  if (fromCwd !== null && isFile(absolute)) return { logical: onDiskSpelling(project.root, absolute, fromCwd), native: absolute, exists: true };
   const asLogical = normalizeLogicalInput(input);
   if (asLogical) {
     const native = toNativePath(project.root, asLogical);
-    if (isFile(native)) return { logical: asLogical, native, exists: true };
+    if (isFile(native)) return { logical: onDiskSpelling(project.root, native, asLogical), native, exists: true };
   }
   if (store) {
     for (const candidate of [fromCwd, asLogical]) {
