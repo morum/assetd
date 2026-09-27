@@ -4,8 +4,9 @@ import { errorMessage } from "../core/errors.ts";
 import { hashBuffer } from "../core/fs-utils.ts";
 import type { IgnoreMatcher } from "../core/ignore.ts";
 import { extensionOf, isWithinLogical } from "../core/paths.ts";
-import type { AssetRecord, FileInfo } from "../core/types.ts";
-import type { VisualEmbeddingProvider } from "../embeddings/types.ts";
+import type { AssetRecord, EmbeddingChannel, FileInfo } from "../core/types.ts";
+import { providerForChannel } from "../embeddings/registry.ts";
+import type { Providers } from "../embeddings/types.ts";
 import type { ProcessorRegistry } from "../processors/registry.ts";
 import type { AssetProcessor, EmbeddingRequest } from "../processors/types.ts";
 import type { IndexStore } from "../storage/index-store.ts";
@@ -23,7 +24,8 @@ export interface IndexRunOptions {
   roots: string[];
   store: IndexStore;
   registry: ProcessorRegistry;
-  visual: VisualEmbeddingProvider;
+  /** One provider per channel the registered processors produce. */
+  providers: Providers;
   ignore: IgnoreMatcher;
   maxFileSizeBytes: number;
   /** Re-attempt files that failed before even if they did not change. */
@@ -62,7 +64,7 @@ interface Prepared {
   file: FileInfo;
   processor: AssetProcessor;
   record?: AssetRecord;
-  request?: EmbeddingRequest;
+  requests?: EmbeddingRequest[];
   /** Unchanged content: only stat info needs refreshing. */
   touchOnly?: boolean;
   /** Disappeared between discovery and reading: treated as removed. */
@@ -97,10 +99,16 @@ function inputVersion(p: AssetProcessor): string {
 export async function runIndex(opts: IndexRunOptions): Promise<IndexStats> {
   const now = opts.now ?? Date.now;
   const started = now();
-  const { store, registry, visual } = opts;
+  const { store, registry, providers } = opts;
   const batchSize = opts.batchSize ?? 16;
   const concurrency = opts.concurrency ?? 4;
-  const spaceId = visual.space.id;
+  const spaceOf = (channel: EmbeddingChannel): string | undefined => providerForChannel(providers, channel)?.space.id;
+  /** Every channel the processor produces has a current vector for this content. */
+  const complete = (contentHash: string, processor: AssetProcessor): boolean =>
+    processor.channels.every((ch) => {
+      const space = spaceOf(ch);
+      return space !== undefined && store.hasEmbedding(contentHash, space, inputVersion(processor));
+    });
   const stats: IndexStats = {
     roots: opts.roots.map((r) => r || "."),
     discovered: 0,
@@ -161,7 +169,7 @@ export async function runIndex(opts: IndexRunOptions): Promise<IndexStats> {
         stats.unchanged++;
         continue;
       }
-      if (prev.state === "indexed" && store.hasEmbedding(prev.contentHash, spaceId, inputVersion(processor))) {
+      if (prev.state === "indexed" && complete(prev.contentHash, processor)) {
         stats.unchanged++;
         continue;
       }
@@ -199,8 +207,7 @@ export async function runIndex(opts: IndexRunOptions): Promise<IndexStats> {
     const contentHash = hashBuffer(data);
     const current = { ...file, size: data.byteLength };
     const prev = existing.get(file.logicalPath);
-    const iv = inputVersion(processor);
-    const embedded = store.hasEmbedding(contentHash, spaceId, iv);
+    const embedded = complete(contentHash, processor);
     if (
       prev &&
       prev.contentHash === contentHash &&
@@ -232,38 +239,52 @@ export async function runIndex(opts: IndexRunOptions): Promise<IndexStats> {
       const record: AssetRecord = { ...base, kind: processed.kind, metadata: processed.metadata };
       if (processed.description !== undefined) record.description = processed.description;
       if (processed.tags !== undefined) record.tags = processed.tags;
-      const request = processed.embeddingRequests.find((r) => r.channel === "visual");
-      return request ? { file: current, processor, record, request } : { file: current, processor, record };
+      const missing = processed.embeddingRequests.find((r) => !spaceOf(r.channel));
+      if (missing) throw new Error(`No embedding provider configured for channel "${missing.channel}"`);
+      return { file: current, processor, record, requests: processed.embeddingRequests };
     } catch (err) {
       return { file: current, processor, record: failRecord(file, processor, `Processing failed: ${errorMessage(err)}`, contentHash) };
     }
   };
 
-  const embedBatch = async (items: Prepared[]): Promise<void> => {
-    const pending = items.filter((p) => p.request);
-    if (pending.length === 0) return;
+  /** Embeds one channel's requests: one batched call, then file-by-file to isolate a failure. */
+  const embedChannel = async (channel: EmbeddingChannel, items: { p: Prepared; req: EmbeddingRequest }[]) => {
+    const call = (reqs: EmbeddingRequest[]): Promise<Float32Array[]> => {
+      if (channel === "visual") return providers.visual.embedImages(reqs.map((r) => (r as Extract<EmbeddingRequest, { channel: "visual" }>).input.image));
+      if (channel === "audio" && providers.audio) return providers.audio.embedAudio(reqs.map((r) => (r as Extract<EmbeddingRequest, { channel: "audio" }>).input.audio));
+      throw new Error(`No embedding provider configured for channel "${channel}"`);
+    };
     const vectors = new Map<Prepared, Float32Array>();
     try {
-      const out = await visual.embedImages(pending.map((p) => p.request!.input.image));
-      pending.forEach((p, i) => vectors.set(p, out[i]!));
-    } catch (batchErr) {
-      // Isolate the offending file(s): retry one by one.
-      for (const p of pending) {
+      const out = await call(items.map((i) => i.req));
+      items.forEach((i, k) => vectors.set(i.p, out[k]!));
+    } catch {
+      for (const { p, req } of items) {
         try {
-          const [v] = await visual.embedImages([p.request!.input.image]);
+          const [v] = await call([req]);
           vectors.set(p, v!);
         } catch (err) {
-          const message = errorMessage(err ?? batchErr);
           if ((err as { code?: string }).code === "MODEL_UNAVAILABLE") throw err;
-          p.record = failRecord(p.file, p.processor, `Embedding failed: ${message}`, p.record?.contentHash ?? "");
+          p.record = failRecord(p.file, p.processor, `Embedding failed: ${errorMessage(err)}`, p.record?.contentHash ?? "");
         }
       }
     }
+    return vectors;
+  };
+
+  const embedBatch = async (items: Prepared[]): Promise<void> => {
+    const byChannel = new Map<EmbeddingChannel, { p: Prepared; req: EmbeddingRequest }[]>();
+    for (const p of items) for (const req of p.requests ?? []) byChannel.set(req.channel, [...(byChannel.get(req.channel) ?? []), { p, req }]);
     const t = now();
-    store.transaction(() => {
-      for (const [p, v] of vectors) store.putEmbedding(p.record!.contentHash, spaceId, inputVersion(p.processor), v, t);
-    });
-    for (const p of pending) delete p.request; // release pixel buffers early
+    for (const [channel, reqs] of byChannel) {
+      const vectors = await embedChannel(channel, reqs);
+      store.transaction(() => {
+        for (const [p, v] of vectors) {
+          if (p.record?.state === "indexed") store.putEmbedding(p.record.contentHash, spaceOf(channel)!, inputVersion(p.processor), v, t);
+        }
+      });
+    }
+    for (const p of items) delete p.requests; // release decoded pixels/samples early
   };
 
   let done = 0;
@@ -310,7 +331,10 @@ export async function runIndex(opts: IndexRunOptions): Promise<IndexStats> {
       for (const p of toRemove) store.deleteAsset(p);
       store.pruneOrphanEmbeddings();
       store.setMeta("lastIndexedAt", new Date(t).toISOString());
-      store.setMeta("visualSpace", spaceId);
+      for (const ch of ["visual", "audio"] as const) {
+        const space = spaceOf(ch);
+        if (space) store.setMeta(`space:${ch}`, space);
+      }
     });
     stats.removed += toRemove.length;
   }

@@ -26,8 +26,10 @@ assetd status
   codes, project-relative `/` paths on every OS.
 - **Windows and Linux** are both first-class (CI runs on both).
 
-This release indexes **images** (PNG, JPEG, WebP, GIF, TIFF, AVIF, SVG). Audio,
-3D models, text and video are planned as separate processors.
+This release indexes **images** (PNG, JPEG, WebP, GIF, TIFF, AVIF, SVG) with
+SigLIP and **sounds** (WAV, OGG, MP3, FLAC, Opus, M4A, AIFF) with CLAP, decoded
+by bundled WASM decoders (no FFmpeg). 3D models, text and video are planned as
+separate processors.
 
 ## Install
 
@@ -68,6 +70,8 @@ re-scans the recorded roots and does the minimum work.
 
 ```text
 assetd search "short metallic sword" --limit 5
+assetd search "heavy metal impact" --type audio
+assetd similar ./assets/sfx/door_creak.ogg
 assetd search "health potion icon" --in assets/ui --json
 assetd similar C:\Users\me\Downloads\reference.png --json
 assetd contact-sheet --search "treasure chest" --limit 12
@@ -98,8 +102,8 @@ Zero-config works. To customize, add `assetd.json` at the project root:
   "roots": ["assets", "content"],
   "ignore": ["**/*_backup.*"],
   "respectGitignore": false,
-  "processors": { "image": true },
-  "models": { "visual": "siglip-base", "dtype": "q8" }
+  "processors": { "image": true, "audio": true },
+  "models": { "visual": "siglip-base", "dtype": "q8", "audio": "clap-general" }
 }
 ```
 
@@ -115,8 +119,11 @@ cache/
 Built-in ignores: `.git/ .hg/ .svn/ node_modules/ .godot/ .import/` (disable
 with `"defaultIgnores": false`). Matching is case-insensitive on every OS.
 
-Models: `siglip-base` (default), `clip-vit-b32`, or `"siglip:<org>/<repo>"` for
-another transformers.js-compatible ONNX export. `dtype` `fp32` is more accurate
+Visual models: `siglip-base` (default), `clip-vit-b32`, or `"siglip:<org>/<repo>"`
+for another transformers.js-compatible ONNX export. Audio models:
+`clap-general` (default), `clap-htsat-unfused`, or `"clap:<org>/<repo>"`. The
+audio model is only downloaded once the project actually contains sounds.
+Model choices are backed by `npm run eval` (see docs/architecture.md). `dtype` `fp32` is more accurate
 and larger. Switching models re-embeds everything once; both spaces are kept
 apart.
 
@@ -143,12 +150,14 @@ assetd contact-sheet <candidates...> --json → open the PNG, choose
 npm ci
 npm test              # build + fast unit/CLI tests (no model download)
 npm run typecheck
-ASSETD_MODEL_DIR=<dir> npm run test:model   # real SigLIP end-to-end test
+ASSETD_MODEL_DIR=<dir> npm run test:model   # real SigLIP + CLAP end-to-end tests
+node scripts/eval/eval.ts fetch               # download the labeled CC0 eval corpus
+node scripts/eval/eval.ts run --kind image --models siglip-base,clip-vit-b32
 ```
 
 The same commands work in PowerShell, cmd and bash. Fast tests use a
-deterministic model-free provider (`ASSETD_VISUAL_MODEL=test-hash`) and
-generated fixtures in temporary directories.
+deterministic model-free providers (`ASSETD_VISUAL_MODEL=test-hash`,
+`ASSETD_AUDIO_MODEL=test-audio`) and fixtures in temporary directories.
 
 ## Documentation
 

@@ -41,15 +41,47 @@ discovery (`python` vs `python3` vs `py`) on Windows.
 ### Model: SigLIP base, int8 ONNX
 
 Default: `Xenova/siglip-base-patch16-224`, `q8` weights (vision 95 MB + text
-106 MB), 768-d joint image–text space. SigLIP was chosen for its stronger
-published zero-shot retrieval than CLIP at the same size; on a 380-icon test set
-with meaningless filenames it returned the right objects for queries like
-"trash can", "a printer", "magnifying glass" and "battery". A systematic
-comparison on game assets has not been done yet.
+106 MB), 768-d joint image–text space. On 1,361 blind-named CC0 game assets
+it finds a relevant file in the top 5 for 85% of queries, against 66–68% for
+CLIP B/32 and B/16; fp32 weights and larger variants are within a few points
+and much slower (full tables and method: [evaluation.md](evaluation.md)).
+`siglip-large` is available for the last few points of quality.
 Alternatives are configuration, not code: `clip-vit-b32`, `dtype: "fp32"`, or
 any transformers.js-layout export of the same families (`"siglip:<org>/<repo>"`).
 
 The two towers load independently: a text search only loads the text encoder.
+
+### Audio: CLAP on ONNX, WASM decoders
+
+Sounds are decoded by `audio-decode` (WebAssembly decoders for WAV, Ogg
+Vorbis/Opus, MP3, FLAC, M4A/AAC, AIFF): no FFmpeg, no native addon, identical
+on Windows and Linux. The processor downmixes to mono, records duration,
+channels, sample rate, average bitrate and peak/RMS level (dBFS), and hands
+the samples to the audio provider.
+
+The audio provider is CLAP (LAION `larger_clap_general`, int8, the best of
+four configurations in [evaluation.md](evaluation.md)) through the same
+transformers.js/ONNX path as SigLIP. CLAP expects 48 kHz and at most 10 s; for longer input its feature
+extractor would take a **random** crop, which would make indexing
+non-deterministic. assetd therefore resamples to 48 kHz itself and embeds fixed
+windows — the whole clip up to 10 s, else start and end, else start, middle and
+end — and averages the normalized vectors. Windows go through the model four
+at a time (~2.9× faster indexing than one per call). Decoding keeps the whole clip in
+memory; very long music files cost memory proportional to their length.
+
+The audio model is created lazily: an image-only project never downloads it,
+and a text search skips any kind with no indexed assets.
+
+### Searching several kinds
+
+Each kind is scored in its own space (images: SigLIP, sounds: CLAP). With
+`--type` the ranking is exactly the single-kind one. Without it, when more than
+one kind has assets, each kind's scores for the query are standardized over
+that kind's candidates (z-score), the filename signal is added in z units
+(identical for every kind), and results merge on the sum. Raw cosines from two models
+are on unrelated scales and are never compared. The z of a kind with `n`
+candidates is shrunk by `n / (n + 10)`: with two images every query yields ±1,
+which would otherwise let a nearly empty kind dominate.
 
 ### Storage: one SQLite file, brute-force cosine
 
@@ -103,9 +135,10 @@ are matched case-insensitively on every OS. Paths are built with `path.join`/
 ### Processors
 
 `AssetProcessor` (`src/processors/types.ts`) declares an id, version, kind,
-extensions, and returns metadata plus **embedding requests** per channel. The
-indexer batches requests by channel and routes them to the provider for that
-channel. A new asset type is a new processor registered in
+channels, extensions, and returns metadata plus **embedding requests** per
+channel. The indexer groups requests by channel (`visual`, `audio`) and routes
+them to that channel's provider; an asset is up to date only when every channel
+its processor produces has a current vector. A new asset type is a new processor registered in
 `createProcessorRegistry`; the engine does not change (a test registers a
 project-specific processor to prove it). Future channels (`audio`, `text`,
 `geometry`) are separate spaces; multimodal ranking will use per-channel
@@ -118,8 +151,9 @@ across spaces.
 |---|---|---|---|---|---|
 | Node.js ≥ 22.13 | runtime, `node:sqlite` | ✓ | ✓ | the user's `node` | install fails (`engines`) |
 | sharp (libvips) | decode images, contact sheets | prebuilt `win32-x64` | prebuilt `linux-x64/arm64` (glibc, musl) | npm optional deps | install error from sharp |
-| onnxruntime-node | run the model | bundled `win32-x64` | bundled `linux-x64/arm64` | inside the npm package | install error |
-| Model weights (~200 MB) | embeddings | ✓ | ✓ | downloaded once from Hugging Face to the model cache | exit 6 with instructions |
+| onnxruntime-node | run the models | bundled `win32-x64` | bundled `linux-x64/arm64` | inside the npm package | install error |
+| audio-decode (WASM) | decode sounds | ✓ (WASM) | ✓ (WASM) | npm package | the file is recorded as failed |
+| Model weights | embeddings | ✓ | ✓ | downloaded once from Hugging Face to the model cache (SigLIP ~200 MB; CLAP only when sounds exist) | exit 6 with instructions |
 
 No other binary is used. FFmpeg, Blender, Python, CUDA, Docker, shells and
 symlinks are not required. onnxruntime-node has an optional install script that
@@ -165,6 +199,7 @@ Windows workstation.
 ## Directory structure
 
 ```text
+scripts/eval/      retrieval benchmark on labeled CC0 game assets (Kenney)
 src/
   cli/            argument parsing, output (JSON/human), one module per command
   contracts/      Zod schemas of every --json document

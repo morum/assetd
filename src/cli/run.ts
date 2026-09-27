@@ -34,13 +34,13 @@ const COMMANDS: Record<string, { options: Options; usage: string; summary: strin
   },
   search: {
     options: SEARCH_OPTIONS,
-    usage: 'assetd search "<query>" [--type image] [--limit 10] [--in <dir>] [--json]',
-    summary: "Semantic text search over indexed assets.",
+    usage: 'assetd search "<query>" [--type image|audio] [--limit 10] [--in <dir>] [--json]',
+    summary: "Semantic text search over indexed assets (all kinds unless --type is given).",
   },
   similar: {
     options: SEARCH_OPTIONS,
-    usage: "assetd similar <path> [--type image] [--limit 10] [--in <dir>] [--json]",
-    summary: "Find assets visually similar to an image (indexed or not, inside the project or not).",
+    usage: "assetd similar <path> [--limit 10] [--in <dir>] [--json]",
+    summary: "Find assets similar to an image or sound (indexed or not, inside the project or not).",
   },
   inspect: {
     options: {},
@@ -58,10 +58,11 @@ const COMMANDS: Record<string, { options: Options; usage: string; summary: strin
       columns: { type: "string" },
       "thumb-size": { type: "string" },
       search: { type: "string" },
+      type: { type: "string", short: "t" },
       limit: { type: "string", short: "n" },
     },
-    usage: 'assetd contact-sheet <path...> | --search "<query>" [--limit 20] [--out sheet.png] [--columns N] [--thumb-size 192] [--json]',
-    summary: "Render candidate images into one labeled grid image for visual comparison.",
+    usage: 'assetd contact-sheet <path...> | --search "<query>" [--type image|audio] [--limit 20] [--out sheet.png] [--columns N] [--thumb-size 192] [--json]',
+    summary: "Render candidates (images, or waveforms for sounds) into one labeled grid image.",
   },
   models: {
     options: {},
@@ -105,8 +106,8 @@ function intOption(value: unknown, name: string, fallback: number, min: number, 
   return n;
 }
 
-function kindOption(value: unknown): AssetKind {
-  if (value === undefined) return "image";
+function kindOption(value: unknown): AssetKind | undefined {
+  if (value === undefined) return undefined;
   if (!(ASSET_KINDS as readonly string[]).includes(String(value))) {
     throw new AssetdError("USAGE_ERROR", `--type must be one of: ${ASSET_KINDS.join(", ")}`);
   }
@@ -196,6 +197,7 @@ export async function run(argv: string[], io: CliIO): Promise<number> {
         return await (await import("./commands/contact-sheet-command.ts")).contactSheetCommand(out, {
           paths: positionals,
           search: v.search as string | undefined,
+          kind: kindOption(v.type),
           limit: intOption(v.limit, "limit", 20, 1, 100),
           out: v.out as string | undefined,
           columns: v.columns === undefined ? undefined : intOption(v.columns, "columns", 4, 1, 20),

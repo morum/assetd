@@ -4,7 +4,8 @@ import { hashBuffer } from "../../core/fs-utils.ts";
 import { extensionOf } from "../../core/paths.ts";
 import { requireIndexedProject } from "../../core/project.ts";
 import { JSON_SCHEMA_VERSION, type InspectOutput } from "../../contracts/json.ts";
-import { createVisualProvider } from "../../embeddings/registry.ts";
+import { channelOfSpace } from "../../embeddings/presets.ts";
+import { createProviders, providerForChannel } from "../../embeddings/registry.ts";
 import { createProcessorRegistry } from "../../processors/registry.ts";
 import { IndexStore } from "../../storage/index-store.ts";
 import { resolveAssetInput } from "../context.ts";
@@ -27,7 +28,7 @@ export async function inspectCommand(out: Output, args: { path: string }): Promi
     const record = store.getAsset(ref.logical);
     if (!record && !ref.exists) throw new AssetdError("PATH_NOT_FOUND", `File not found: ${args.path}`, { path: args.path });
 
-    const activeSpace = createVisualProvider(project.config, { env: io.env }).space.id;
+    const providers = createProviders(project.config, { env: io.env });
     const registry = createProcessorRegistry(project.config);
     let stat: { size: number; mtimeMs: number } | null = null;
     if (ref.exists) {
@@ -61,12 +62,16 @@ export async function inspectCommand(out: Output, args: { path: string }): Promi
     };
 
     if (record) {
-      doc.embeddings = store.embeddingsFor(record.contentHash).map((e) => ({
-        channel: "visual",
-        space: e.spaceId,
-        dimensions: e.dims,
-        current: e.spaceId === activeSpace && e.inputVersion === `${record.processorId}@${record.processorVersion}`,
-      }));
+      doc.embeddings = store.embeddingsFor(record.contentHash).map((e) => {
+        const channel = channelOfSpace(e.spaceId);
+        const active = providerForChannel(providers, channel)?.space.id;
+        return {
+          channel,
+          space: e.spaceId,
+          dimensions: e.dims,
+          current: e.spaceId === active && e.inputVersion === `${record.processorId}@${record.processorVersion}`,
+        };
+      });
       if (!ref.exists) doc.state = "missing";
       else if (record.state === "failed") doc.state = "failed";
       else if (stat && (stat.size !== record.size || stat.mtimeMs !== record.modifiedAtMs)) doc.state = "stale";
@@ -105,6 +110,11 @@ export async function inspectCommand(out: Output, args: { path: string }): Promi
       if ("hasTransparency" in m) lines.push(`Alpha:      ${m.hasTransparency ? "transparent pixels" : m.hasAlphaChannel ? "alpha channel, fully opaque" : "none"}`);
       if (m.dominantColor) lines.push(`Dominant:   ${String(m.dominantColor)}`);
       if (m.animated) lines.push(`Frames:     ${String(m.frames)}`);
+      if (typeof m.durationSeconds === "number") {
+        lines.push(`Duration:   ${m.durationSeconds.toFixed(3)} s`);
+        lines.push(`Audio:      ${String(m.channels)} ch, ${String(m.sampleRate)} Hz, ~${String(m.bitrateKbps)} kbps`);
+        lines.push(`Levels:     peak ${m.peakDb ?? "-∞"} dBFS, RMS ${m.rmsDb ?? "-∞"} dBFS`);
+      }
       if (doc.processor) lines.push(`Processor:  ${doc.processor.id}@${doc.processor.version}`);
       for (const e of doc.embeddings) lines.push(`Embedding:  ${e.space} (${e.dimensions}d)${e.current ? "" : " [not current]"}`);
       if (doc.indexedAt) lines.push(`Indexed at: ${doc.indexedAt}`);

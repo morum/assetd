@@ -1,0 +1,20 @@
+{
+  "$comment": "Each query lists a case-insensitive regex over the original file basename (without extension). Any matching file counts as relevant.",
+  "queries": [
+    ["a giraffe", "giraffe"], ["an elephant", "elephant"], ["a penguin", "penguin"], ["a monkey", "monkey"],
+    ["a pig", "^pig"], ["a parrot", "parrot"], ["a snake", "snake"], ["a fish", "fish"], ["a spider", "spider"],
+    ["a snail", "snail"], ["a bee", "^bee"], ["a frog", "frog"], ["a bat", "^bat"], ["a ghost", "ghost"],
+    ["a skull", "skull"], ["a mushroom", "shroom"], ["a tree", "^tree"], ["a cloud", "cloud"], ["a key", "^key|_key"],
+    ["a coin", "coin"], ["a gem or jewel", "^gem"], ["a sword", "sword"], ["a shield", "shield"], ["dice", "dice|d6"],
+    ["a chess knight", "chess_knight"], ["the spades card suit", "spade"], ["a crown", "^crown"], ["a trophy", "trophy"],
+    ["a lollipop", "lollipop"], ["a cake", "cake"], ["a flag", "flag"], ["a burning torch", "torch|toch"],
+    ["an umbrella", "umbrella"], ["a door", "door"], ["a wooden fence", "fence"], ["a ladder", "ladder"],
+    ["a springboard", "spring"], ["snowy ground tile", "snow"], ["lava", "lava"], ["a castle", "castle"],
+    ["a house", "house"], ["a window", "window"], ["a slime monster", "slime"], ["a pink alien character", "alienPink"],
+    ["heart emote", "emote_heart"], ["a question mark", "question"], ["an exclamation mark", "exclamation|alert"],
+    ["sleeping zzz", "sleep"], ["an angry face", "angry|anger"], ["a trash can", "trash"], ["a magnifying glass", "zoom"],
+    ["a gamepad controller", "gamepad"], ["a wrench", "wrench"], ["an hourglass", "hourglass"],
+    ["a music note", "music|audio"], ["a padlock", "^lock|_lock|doorLock|unlock"], ["a target", "target"],
+    ["a medal", "medal"], ["a star", "^star|_star"]
+  ]
+}

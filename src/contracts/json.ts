@@ -15,6 +15,8 @@ const envelope = <C extends string>(command: C) => ({
 });
 
 export const modelInfoSchema = z.object({
+  /** Embedding channel this model serves ("visual", "audio"). Added in 0.2. */
+  channel: z.string().optional(),
   space: z.string(),
   provider: z.string(),
   model: z.string(),
@@ -27,18 +29,34 @@ export const searchResultSchema = z.object({
   path: z.string(),
   kind,
   score: z.number(),
-  signals: z.object({ visual: z.number(), lexical: z.number() }),
+  /**
+   * `visual` is present for image results, `audio` for audio results (cosine in
+   * that channel's space); `z` only in cross-kind searches.
+   */
+  signals: z.object({
+    visual: z.number().optional(),
+    audio: z.number().optional(),
+    lexical: z.number(),
+    z: z.number().optional(),
+    intent: z.number().optional(),
+  }),
   metadata: z.record(z.string(), z.unknown()),
 });
+
+const searchType = z.union([kind, z.literal("all")]);
 
 export const searchOutputSchema = z.object({
   ...envelope("search"),
   query: z.string(),
-  type: kind,
+  /** A kind, or "all" when no --type was given and several kinds are indexed. */
+  type: searchType,
   limit: z.number().int(),
   within: z.string().nullable(),
   ranking: z.string(),
+  /** Model of the searched kind (for "all": the visual model). */
   model: modelInfoSchema,
+  /** Every model that took part in this search. Added in 0.2. */
+  models: z.array(modelInfoSchema).optional(),
   candidates: z.number().int(),
   results: z.array(searchResultSchema),
   timings: z.object({ totalMs: z.number(), embedMs: z.number(), searchMs: z.number(), queryCached: z.boolean() }),
@@ -61,6 +79,7 @@ export const indexOutputSchema = z.object({
   root: z.string(),
   roots: z.array(z.string()),
   model: modelInfoSchema,
+  models: z.array(modelInfoSchema).optional(),
   discovered: z.number().int(),
   supported: z.number().int(),
   indexed: z.number().int(),
@@ -108,7 +127,9 @@ export const statusOutputSchema = z.object({
   failures: z.array(z.object({ path: z.string(), error: z.string() })),
   processors: z.array(z.object({ id: z.string(), version: z.string(), enabled: z.boolean() })),
   unavailableProcessors: z.array(z.string()),
+  /** The visual model (kept for compatibility); see `models` for every channel. */
   model: modelInfoSchema.extend({ cached: z.boolean() }).nullable(),
+  models: z.array(modelInfoSchema.extend({ cached: z.boolean() })).optional(),
   indexVersion: z.number().int().nullable(),
   stale: z.boolean().nullable(),
   staleness: z
@@ -133,6 +154,7 @@ export const modelsOutputSchema = z.object({
   cacheDir: z.string(),
   offline: z.boolean(),
   model: modelInfoSchema.extend({ cached: z.boolean() }),
+  models: z.array(modelInfoSchema.extend({ cached: z.boolean() })).optional(),
 });
 
 export const errorOutputSchema = z.object({

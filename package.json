@@ -10,17 +10,20 @@
     "test:model": "vitest run --project model",
     "dev": "node --experimental-strip-types src/cli/main.ts",
     "assetd": "node dist/cli/main.js",
-    "test:unit": "vitest run --project unit"
+    "test:unit": "vitest run --project unit",
+    "eval": "node scripts/eval/eval.ts"
   },
   "type": "module",
   "dependencies": {
     "@huggingface/transformers": "^4.3.0",
+    "audio-decode": "^3.12.0",
     "ignore": "^7.0.9",
     "sharp": "^0.35.4",
     "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/node": "^26.6.2",
+    "fflate": "^0.8.3",
     "typescript": "^7.0.2",
     "vitest": "^5.0.1"
   },

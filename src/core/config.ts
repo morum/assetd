@@ -8,7 +8,7 @@ export const CONFIG_FILE_NAME = "assetd.json";
 const processorsSchema = z
   .object({
     image: z.boolean().default(true),
-    audio: z.boolean().default(false),
+    audio: z.boolean().default(true),
     model3d: z.boolean().default(false),
     video: z.boolean().default(false),
     text: z.boolean().default(false),
@@ -21,6 +21,9 @@ const modelsSchema = z
     visual: z.string().min(1).default("siglip-base"),
     /** ONNX weight variant. "q8" is the small default; "fp32" is the most accurate. */
     dtype: z.enum(["q8", "fp16", "fp32"]).optional(),
+    /** Audio embedding model: a preset name or "clap:<org>/<repo>". */
+    audio: z.string().min(1).default("clap-general"),
+    audioDtype: z.enum(["q8", "fp16", "fp32"]).optional(),
   })
   .strict();
 
@@ -37,8 +40,8 @@ export const configSchema = z
     defaultIgnores: z.boolean().default(true),
     /** Files larger than this are recorded as failed instead of being decoded. */
     maxFileSizeMb: z.number().positive().default(256),
-    processors: processorsSchema.default({ image: true, audio: false, model3d: false, video: false, text: false }),
-    models: modelsSchema.default({ visual: "siglip-base" }),
+    processors: processorsSchema.default({ image: true, audio: true, model3d: false, video: false, text: false }),
+    models: modelsSchema.default({ visual: "siglip-base", audio: "clap-general" }),
   })
   .strict();
 
@@ -78,6 +81,7 @@ export function loadConfig(projectRoot: string, env: NodeJS.ProcessEnv = process
   }
   // Environment overrides are mainly for tests and CI.
   if (env.ASSETD_VISUAL_MODEL) config.models.visual = env.ASSETD_VISUAL_MODEL;
+  if (env.ASSETD_AUDIO_MODEL) config.models.audio = env.ASSETD_AUDIO_MODEL;
   if (env.ASSETD_MODEL_DTYPE) {
     const dtype = z.enum(["q8", "fp16", "fp32"]).safeParse(env.ASSETD_MODEL_DTYPE);
     if (!dtype.success) throw new AssetdError("USAGE_ERROR", `Invalid ASSETD_MODEL_DTYPE: ${env.ASSETD_MODEL_DTYPE}`);

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { EmbeddingSpace } from "../core/types.ts";
-import { spaceIdFor, type VisualModelSpec } from "./presets.ts";
+import { spaceIdFor, type ModelSpec } from "./presets.ts";
 import { l2normalize, type ImageInput, type VisualEmbeddingProvider } from "./types.ts";
 
 const GRID = 4;
@@ -24,7 +24,7 @@ const COLORS: Record<string, [number, number, number]> = {
 export class TestHashProvider implements VisualEmbeddingProvider {
   readonly space: EmbeddingSpace;
 
-  constructor(spec: VisualModelSpec) {
+  constructor(spec: ModelSpec) {
     this.space = { id: spaceIdFor(spec), channel: "visual", provider: "test-hash", model: "none", dimensions: DIMS };
   }
 

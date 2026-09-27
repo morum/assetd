@@ -3,3 +3,4 @@ dist/
 .asset-index/
 coverage/
 *.log
+.eval-data/

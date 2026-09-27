@@ -1,12 +1,15 @@
 import fs from "node:fs/promises";
 import sharp, { type OverlayOptions } from "sharp";
 import { errorMessage } from "../core/errors.ts";
+import { renderWaveform } from "./waveform.ts";
 
 export interface ContactSheetItem {
   label: string;
   /** Native path of the image to show (the asset itself, or a derived preview later). */
   nativePath: string;
   caption: string;
+  /** Audio items are shown as a waveform of these (mono) samples. */
+  waveform?: Float32Array;
 }
 
 export interface ContactSheetOptions {
@@ -107,6 +110,24 @@ async function renderCaption(text: string, width: number): Promise<Buffer | null
   }
 }
 
+async function renderTile(item: ContactSheetItem, thumb: number, board: Buffer): Promise<Buffer> {
+  if (item.waveform) {
+    return sharp(renderWaveform(item.waveform, thumb, thumb), { raw: { width: thumb, height: thumb, channels: 3 } }).png().toBuffer();
+  }
+  const data = await fs.readFile(item.nativePath);
+  const meta = await sharp(data, { animated: false }).metadata();
+  const small = Math.max(meta.width ?? 0, meta.height ?? 0) < thumb / 2;
+  const img = await sharp(data, { animated: false })
+    .autoOrient()
+    .resize(thumb, thumb, { fit: "inside", kernel: small ? "nearest" : "lanczos3" })
+    .png()
+    .toBuffer({ resolveWithObject: true });
+  return sharp(board)
+    .composite([{ input: img.data, left: Math.floor((thumb - img.info.width) / 2), top: Math.floor((thumb - img.info.height) / 2) }])
+    .png()
+    .toBuffer();
+}
+
 /**
  * Lays out thumbnails in a grid, each with a numeric badge (stable label) and a
  * filename caption. Unreadable images become grey placeholders and are
@@ -130,18 +151,7 @@ export async function renderContactSheet(items: ContactSheetItem[], options: Con
       const top = GAP + Math.floor(i / columns) * (cellH + GAP);
       let tile: Buffer;
       try {
-        const data = await fs.readFile(item.nativePath);
-        const meta = await sharp(data, { animated: false }).metadata();
-        const small = Math.max(meta.width ?? 0, meta.height ?? 0) < thumb / 2;
-        const img = await sharp(data, { animated: false })
-          .autoOrient()
-          .resize(thumb, thumb, { fit: "inside", kernel: small ? "nearest" : "lanczos3" })
-          .png()
-          .toBuffer({ resolveWithObject: true });
-        tile = await sharp(board)
-          .composite([{ input: img.data, left: Math.floor((thumb - img.info.width) / 2), top: Math.floor((thumb - img.info.height) / 2) }])
-          .png()
-          .toBuffer();
+        tile = await renderTile(item, thumb, board);
       } catch (err) {
         errors.set(item.label, errorMessage(err));
         tile = await sharp({ create: { width: thumb, height: thumb, channels: 3, background: "#9a9a9a" } }).png().toBuffer();

@@ -2,9 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { normalizeLogicalInput, pathMatchKey, toLogicalPath, toNativePath } from "../core/paths.ts";
 import type { Project } from "../core/project.ts";
-import { resolveVisualModel } from "../embeddings/presets.ts";
-import { createVisualProvider } from "../embeddings/registry.ts";
-import type { VisualEmbeddingProvider } from "../embeddings/types.ts";
+import { createProviders, modelSpecForChannel } from "../embeddings/registry.ts";
+import type { EmbeddingProvider, Providers } from "../embeddings/types.ts";
+import type { TransformersProviderOptions } from "../embeddings/transformers-provider.ts";
 import type { IndexStore } from "../storage/index-store.ts";
 import type { Output } from "./io.ts";
 
@@ -20,9 +20,10 @@ export function displayPath(project: Project, native: string): string {
   return toLogicalPath(project.root, native) ?? native;
 }
 
-export function modelInfo(project: Project, provider: VisualEmbeddingProvider) {
-  const spec = resolveVisualModel(project.config.models.visual, project.config.models.dtype);
+export function modelInfo(project: Project, provider: EmbeddingProvider) {
+  const spec = modelSpecForChannel(project.config, provider.space.channel);
   return {
+    channel: provider.space.channel,
     space: provider.space.id,
     provider: provider.space.provider,
     model: spec.name === spec.repo ? spec.repo : `${spec.name} (${spec.repo})`,
@@ -37,10 +38,10 @@ function formatBytes(n: number): string {
   return `${n} B`;
 }
 
-/** Provider whose model downloads report on stderr (never stdout). */
-export function providerFor(project: Project, out: Output): VisualEmbeddingProvider {
+/** Progress hook that reports real model downloads on stderr (never stdout). */
+function downloadReporter(out: Output): TransformersProviderOptions {
   const announced = new Set<string>();
-  return createVisualProvider(project.config, {
+  return {
     env: out.io.env,
     onProgress: (e) => {
       if (e.status === "progress" && e.total && e.total > 5 * 1048576) {
@@ -54,7 +55,17 @@ export function providerFor(project: Project, out: Output): VisualEmbeddingProvi
         out.info(`  ${e.file}: done`);
       }
     },
-  });
+  };
+}
+
+/** Providers for every enabled channel. Cheap: weights load on first use. */
+export function providersFor(project: Project, out: Output): Providers {
+  return createProviders(project.config, downloadReporter(out));
+}
+
+/** All providers, as a list (for status/models output). */
+export function providerList(providers: Providers): EmbeddingProvider[] {
+  return providers.audio ? [providers.visual, providers.audio] : [providers.visual];
 }
 
 export interface ResolvedAssetPath {

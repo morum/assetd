@@ -18,10 +18,11 @@ function touch(logical: string, content = "x") {
 }
 
 describe("config", () => {
-  it("is zero-config by default with images only", () => {
+  it("is zero-config by default with images and audio", () => {
     project = tempProject();
     const c = loadConfig(project.root, {});
-    expect(c.processors).toEqual({ image: true, audio: false, model3d: false, video: false, text: false });
+    expect(c.processors).toEqual({ image: true, audio: true, model3d: false, video: false, text: false });
+    expect(c.models.audio).toBe("clap-general");
     expect(c.models.visual).toBe("siglip-base");
   });
   it("reports invalid configuration as a usage error", () => {

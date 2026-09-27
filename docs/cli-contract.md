@@ -23,7 +23,8 @@ the output to a stable machine-readable document.
 }
 ```
 
-Compatibility: releases with the same `schemaVersion` only **add** fields.
+Compatibility: releases with the same `schemaVersion` only **add** fields
+(and, for enums such as `kind` or `type`, add values).
 Renaming or removing a field, or changing its meaning, bumps `schemaVersion`.
 The authoritative schemas are the Zod definitions in `src/contracts/json.ts`.
 
@@ -67,14 +68,20 @@ date. `assetd ensure-index` is the same operation without arguments.
 `supported` those an enabled processor handles. `unchanged` includes files that
 failed before and did not change (use `--retry-failed` to try them again).
 
-### `assetd search "<query>" [--type image] [--limit 10] [--in <dir>]`
+### `assetd search "<query>" [--type image|audio] [--limit 10] [--in <dir>]`
+
+Without `--type`, every indexed kind is searched. If only one kind has indexed
+assets (e.g. an image-only project), the output is exactly the single-kind
+search below (`type` is that kind). If several kinds have assets, `type` is
+`"all"` and `ranking` is `"zscore-fusion/v2"` (see *Scores* below).
 
 ```json
 {
   "schemaVersion": 1, "command": "search",
   "query": "wooden treasure chest", "type": "image", "limit": 10, "within": null,
   "ranking": "visual+lexical/v1",
-  "model": { "...": "..." },
+  "model": { "channel": "visual", "...": "..." },
+  "models": [{ "channel": "visual", "...": "..." }],
   "candidates": 1384,
   "results": [
     {
@@ -87,15 +94,31 @@ failed before and did not change (use `--retry-failed` to try them again).
 }
 ```
 
-Scores are only comparable **within one result list**. `score = visual + 0.05 × lexical`,
-where `visual` is the cosine similarity in the visual model's joint space
-(SigLIP cosines for good matches are typically 0.08–0.20, not near 1.0) and
-`lexical` is the fraction of query words found in the path.
+**Scores** are only comparable **within one result list**.
 
-### `assetd similar <path> [--type image] [--limit 10] [--in <dir>]`
+- Single kind (`ranking` `visual+lexical/v1` or `audio+lexical/v1`):
+  `score = semantic + 0.05 × lexical`. `signals.visual` (images, SigLIP) or
+  `signals.audio` (sounds, CLAP) is the cosine similarity in that model's joint
+  text–media space — good SigLIP matches are typically 0.08–0.20, not near 1.0 —
+  and `signals.lexical` is the fraction of query words found in the path.
+- Several kinds (`zscore-fusion/v2`): cosines from different models are never
+  compared. Each kind's semantic scores are standardized over all of that
+  kind's candidates for the query (`signals.z`), shrunk by `n / (n + 10)` so
+  that a kind with a handful of assets cannot dominate; then
+  `score = z + 1 × lexical + 4 × intent`, the same weights for every kind.
+  `signals.intent` is 1 for the kind the query explicitly names ("the sound
+  of coins", "a sword icon", "wind ambience"); 0 otherwise.
+  `signals.visual`/`signals.audio` still carry the raw cosine.
+
+Audio results carry `metadata` such as `durationSeconds`, `channels`,
+`sampleRate`, `format`, `bitrateKbps` (average), `peakDb`, `rmsDb`.
+
+### `assetd similar <path> [--limit 10] [--in <dir>]`
 
 `<path>` may be an indexed asset, an unindexed file in the project, or any image
-elsewhere on disk (it is embedded on the fly). The reference itself is excluded;
+or sound elsewhere on disk (it is embedded on the fly). Results are of the
+reference's kind (image → images via SigLIP, sound → sounds via CLAP); passing
+a different `--type` is a usage error. The reference itself is excluded;
 byte-identical copies are marked `"duplicate": true`.
 
 ```json
@@ -150,9 +173,11 @@ The staleness check only stats files (no hashing, no model). With
 `--no-stale-check`, `stale` and `staleness` are `null`. Without an index:
 `"indexed": false`, exit code 0.
 
-### `assetd contact-sheet <path...> | --search "<query>" [--limit 20] [--out file.png] [--columns N] [--thumb-size 192]`
+### `assetd contact-sheet <path...> | --search "<query>" [--type image|audio] [--limit 20] [--out file.png] [--columns N] [--thumb-size 192]`
 
-Renders the candidates into one PNG grid. Every tile carries a numeric badge
+Renders the candidates into one PNG grid; sounds are drawn as waveforms with
+their duration in the caption (so an agent that cannot listen still sees
+short hit vs. long loop). Every tile carries a numeric badge
 (drawn from a built-in bitmap font, identical on every OS) plus a filename
 caption. Without `--out` the file goes to `.asset-index/contact-sheets/`,
 named after its inputs so identical requests reuse it.
@@ -165,8 +190,9 @@ named after its inputs so identical requests reuse it.
 
 ### `assetd models <status|pull>`
 
-`pull` downloads the weights now (for later offline use) and runs one tiny
-embedding to confirm they work.
+`pull` downloads the weights of every enabled channel now (for later offline
+use) and runs one tiny embedding per model to confirm they work. `model` is the
+visual model (compatibility); `models` lists all.
 
 ```json
 { "schemaVersion": 1, "command": "models", "action": "status", "cacheDir": "/home/u/.cache/assetd/models", "offline": false,
@@ -180,6 +206,7 @@ embedding to confirm they work.
 | `ASSETD_MODEL_DIR` | Model weight cache directory (default: see docs/architecture.md) |
 | `ASSETD_OFFLINE=1` (or `HF_HUB_OFFLINE=1`) | Never touch the network; missing weights → exit 6 |
 | `ASSETD_VISUAL_MODEL` | Override `models.visual` (e.g. `clip-vit-b32`) |
+| `ASSETD_AUDIO_MODEL` | Override `models.audio` (e.g. `clap-htsat-unfused`) |
 | `ASSETD_MODEL_DTYPE` | Override `models.dtype` (`q8`, `fp16`, `fp32`) |
 | `ASSETD_THREADS` | Cap ONNX Runtime intra-op threads (default: runtime decides) |
 | `ASSETD_DEBUG=1` | Print stack traces for internal errors |

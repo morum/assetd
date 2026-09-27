@@ -28,7 +28,7 @@ function options(overrides: Partial<IndexRunOptions> = {}): IndexRunOptions {
     roots: [""],
     store,
     registry: new ProcessorRegistry().register(new ImageProcessor()),
-    visual: new TestHashProvider(resolveVisualModel("test-hash")),
+    providers: { visual: new TestHashProvider(resolveVisualModel("test-hash")) },
     ignore: createIgnoreMatcher(project.root, defaultConfig()),
     maxFileSizeBytes: 10 * 1048576,
     batchSize: 2,
@@ -94,7 +94,7 @@ describe("indexer", () => {
       if (imgs.length > 1 || call === 3) throw new Error("boom");
       return original(imgs);
     };
-    const stats = await runIndex(options({ visual, batchSize: 3 }));
+    const stats = await runIndex(options({ providers: { visual }, batchSize: 3 }));
     expect(stats.indexed + stats.failed).toBe(3);
     expect(stats.failed).toBe(1);
     expect(stats.failures[0]!.error).toMatch(/Embedding failed: boom/);

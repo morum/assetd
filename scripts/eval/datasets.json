@@ -1,0 +1,69 @@
+{
+  "$comment": "CC0 asset packs by Kenney (https://kenney.nl). Filenames are the relevance labels; the evaluation copies files under meaningless names so that only the model sees content.",
+  "packs": [
+    {
+      "id": "animal-pack",
+      "kind": "image",
+      "url": "https://kenney.nl/media/pages/assets/animal-pack/480cf9f223-1677669996/kenney_animal-pack.zip",
+      "sha256": "0bc2c14992bc5156dcb0af06d61553c68a0fc3ec6ff6aa9781f9ed1b7120b8a9",
+      "include": ["PNG/Square/"]
+    },
+    {
+      "id": "board-game-icons",
+      "kind": "image",
+      "url": "https://kenney.nl/media/pages/assets/board-game-icons/19cae04050-1721645690/kenney_board-game-icons.zip",
+      "sha256": "05f4358381d8b16b303b2f056393b76ce3f6a58228599e88caa2eab11d4c2946",
+      "include": ["PNG/Default (64px)/"]
+    },
+    {
+      "id": "emotes-pack",
+      "kind": "image",
+      "url": "https://kenney.nl/media/pages/assets/emotes-pack/d00a3dcb06-1677578798/kenney_emotes-pack.zip",
+      "sha256": "96ab3f2c92d7acd860942efca1c9f1295184b11d3db5c79c28da82036e496526",
+      "include": ["PNG/Vector/Style 1/", "PNG/Pixel/Style 1/"]
+    },
+    {
+      "id": "game-icons",
+      "kind": "image",
+      "url": "https://kenney.nl/media/pages/assets/game-icons/1ebf9c14af-1677661579/kenney_game-icons.zip",
+      "sha256": "7a86d8d58e0b851e22004b3c70bf90b003632bbf9ac633424daa3bb17d9e7e4e",
+      "include": ["PNG/Black/2x/"]
+    },
+    {
+      "id": "platformer-art-deluxe",
+      "kind": "image",
+      "url": "https://kenney.nl/media/pages/assets/platformer-art-deluxe/cb30f83169-1677696393/kenney_platformer-art-deluxe.zip",
+      "sha256": "232c5644858287181ff5b20107b1969064a2833dd4ab51a6a4c5997889d2720d",
+      "include": [""],
+      "exclude": "sheet|preview|sample"
+    },
+    {
+      "id": "impact-sounds",
+      "kind": "audio",
+      "url": "https://kenney.nl/media/pages/assets/impact-sounds/87b4ddecda-1677589768/kenney_impact-sounds.zip",
+      "sha256": "029d734af1582474edf3a694d1b0cebc97c1c152f2f39fa34d4c2bafc5de77f8",
+      "include": [""]
+    },
+    {
+      "id": "interface-sounds",
+      "kind": "audio",
+      "url": "https://kenney.nl/media/pages/assets/interface-sounds/fa43c1dd4d-1677589452/kenney_interface-sounds.zip",
+      "sha256": "f2193d072726d6758a5f7871b2dcc54dcce0d5c35c6f0a62f92549b327c81232",
+      "include": [""]
+    },
+    {
+      "id": "rpg-audio",
+      "kind": "audio",
+      "url": "https://kenney.nl/media/pages/assets/rpg-audio/8e99002d76-1677590336/kenney_rpg-audio.zip",
+      "sha256": "6dbeaf8544da958d8f2adcb4a4a4b76c1ade34a05f8ab9edccd327da7375f38b",
+      "include": [""]
+    },
+    {
+      "id": "sci-fi-sounds",
+      "kind": "audio",
+      "url": "https://kenney.nl/media/pages/assets/sci-fi-sounds/6b296f9ecf-1677589334/kenney_sci-fi-sounds.zip",
+      "sha256": "119340f351a5098ad814f78719438c0da355a9ce8a4c8a3af6a8d48aa3d49e04",
+      "include": [""]
+    }
+  ]
+}

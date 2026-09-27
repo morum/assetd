@@ -191,7 +191,7 @@ describe("assetd search / similar", () => {
   it("uses documented exit codes for errors", async () => {
     expect((await cli(project.root, "similar", "missing.png", "--json")).code).toBe(ExitCode.PATH_NOT_FOUND);
     expect((await cli(project.root, "similar", "assets/readme.txt", "--json")).code).toBe(ExitCode.NOT_INDEXED);
-    expect((await cli(project.root, "search", "x", "--type", "audio", "--json")).code).toBe(ExitCode.USAGE_ERROR);
+    expect((await cli(project.root, "search", "x", "--type", "video", "--json")).code).toBe(ExitCode.USAGE_ERROR);
     expect((await cli(project.root, "search", "x", "--bogus", "--json")).code).toBe(ExitCode.USAGE_ERROR);
     expect((await cli(project.root, "frobnicate")).code).toBe(ExitCode.USAGE_ERROR);
   });

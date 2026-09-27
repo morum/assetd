@@ -1,18 +1,20 @@
+import path from "node:path";
 import { AssetdError } from "../../core/errors.ts";
 import { normalizeLogicalInput, toLogicalPath } from "../../core/paths.ts";
 import { requireIndexedProject, type Project } from "../../core/project.ts";
 import type { AssetKind, AssetMetadata } from "../../core/types.ts";
 import { JSON_SCHEMA_VERSION, type SearchOutput } from "../../contracts/json.ts";
-import { RANKING_ID } from "../../search/ranking.ts";
-import { searchByText } from "../../search/search-service.ts";
+import type { Providers } from "../../embeddings/types.ts";
+import { FUSED_RANKING_ID, rankingId } from "../../search/ranking.ts";
+import { searchAcrossKinds, searchByText, type KindSource } from "../../search/search-service.ts";
 import { IndexStore } from "../../storage/index-store.ts";
-import { modelInfo, providerFor } from "../context.ts";
+import { modelInfo, providersFor } from "../context.ts";
 import type { Output } from "../io.ts";
-import path from "node:path";
 
 export interface SearchArgs {
   query: string;
-  kind: AssetKind;
+  /** Undefined: every indexed kind. */
+  kind: AssetKind | undefined;
   limit: number;
   within: string | undefined;
 }
@@ -26,9 +28,26 @@ export function resolveWithin(project: Project, cwd: string, within: string | un
   return logical;
 }
 
+/** Searchable kinds and the provider of each one's space. */
+export function kindSources(providers: Providers): KindSource[] {
+  const sources: KindSource[] = [{ kind: "image", provider: providers.visual }];
+  if (providers.audio) sources.push({ kind: "audio", provider: providers.audio });
+  return sources;
+}
+
+export function requireSource(sources: KindSource[], kind: AssetKind): KindSource {
+  const source = sources.find((s) => s.kind === kind);
+  if (!source) {
+    const available = sources.map((s) => s.kind).join(", ");
+    throw new AssetdError("USAGE_ERROR", `Searching "${kind}" assets is not available (enabled: ${available}).`);
+  }
+  return source;
+}
+
 export function describeMetadata(m: AssetMetadata): string {
   const parts: string[] = [];
   if (typeof m.width === "number" && typeof m.height === "number") parts.push(`${m.width}x${m.height}`);
+  if (typeof m.durationSeconds === "number") parts.push(`${m.durationSeconds.toFixed(2)}s`);
   if (typeof m.format === "string") parts.push(m.format);
   if (m.hasTransparency === true) parts.push("alpha");
   if (m.animated === true) parts.push(`${String(m.frames)} frames`);
@@ -39,22 +58,34 @@ export async function searchCommand(out: Output, args: SearchArgs): Promise<numb
   const started = performance.now();
   const { io } = out;
   if (args.query.trim() === "") throw new AssetdError("USAGE_ERROR", "Search query is empty");
-  if (args.kind !== "image") throw new AssetdError("USAGE_ERROR", `Searching "${args.kind}" assets is not supported yet; only "image" is indexed.`);
   const project = requireIndexedProject({ cwd: io.cwd, projectFlag: out.flags.project, env: io.env });
   const within = resolveWithin(project, io.cwd, args.within);
   const store = IndexStore.open(project.dbPath, { create: false });
   try {
-    const provider = providerFor(project, out);
-    const outcome = await searchByText(store, provider, args.query, { kind: args.kind, limit: args.limit, within });
+    const providers = providersFor(project, out);
+    const sources = kindSources(providers);
+    if (args.kind) requireSource(sources, args.kind);
+    // Without --type, fuse only when more than one kind actually has assets;
+    // an image-only project gets exactly the single-kind ranking.
+    const counts = store.countByKind();
+    const populated = sources.filter((s) => (counts[s.kind] ?? 0) > 0);
+    const single = args.kind ? requireSource(sources, args.kind) : populated.length === 1 ? populated[0]! : populated.length === 0 ? sources[0]! : undefined;
+
+    const outcome = single
+      ? await searchByText(store, single.provider, args.query, { kind: single.kind, limit: args.limit, within })
+      : await searchAcrossKinds(store, populated, args.query, { limit: args.limit, within });
+    const used = single ? [single] : populated;
+    const primary = single ?? populated[0]!;
     const doc: SearchOutput = {
       schemaVersion: JSON_SCHEMA_VERSION,
       command: "search",
       query: args.query,
-      type: args.kind,
+      type: single ? single.kind : "all",
       limit: args.limit,
       within: within ?? null,
-      ranking: RANKING_ID,
-      model: modelInfo(project, provider),
+      ranking: single ? rankingId(single.provider.space.channel === "audio" ? "audio" : "visual") : FUSED_RANKING_ID,
+      model: modelInfo(project, primary.provider),
+      models: used.map((s) => modelInfo(project, s.provider)),
       candidates: outcome.candidates,
       results: outcome.hits.map((h, i) => ({ rank: i + 1, path: h.path, kind: h.kind, score: h.score, signals: h.signals, metadata: h.metadata })),
       timings: {
@@ -64,9 +95,13 @@ export async function searchCommand(out: Output, args: SearchArgs): Promise<numb
         queryCached: outcome.queryCached,
       },
     };
-    if (outcome.candidates === 0) out.warn("the index has no searchable images for the current model; run `assetd index`");
+    if (outcome.candidates === 0) out.warn("the index has no searchable assets of this type for the current model; run `assetd index`");
     out.result(doc, () =>
-      doc.results.length === 0 ? "No results." : doc.results.map((r) => `${r.score.toFixed(3)}  ${r.path}  ${describeMetadata(r.metadata)}`.trimEnd()).join("\n"),
+      doc.results.length === 0
+        ? "No results."
+        : doc.results
+            .map((r) => `${r.score.toFixed(3)}  ${doc.type === "all" ? `${r.kind.padEnd(5)}  ` : ""}${r.path}  ${describeMetadata(r.metadata)}`.trimEnd())
+            .join("\n"),
     );
     return 0;
   } finally {

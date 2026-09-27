@@ -7,6 +7,12 @@ export interface ImageInput {
   height: number;
 }
 
+/** Decoded mono PCM in [-1, 1] at its native sample rate. */
+export interface AudioInput {
+  samples: Float32Array;
+  sampleRate: number;
+}
+
 export interface ProviderLoadEvent {
   file: string;
   loaded?: number;
@@ -15,20 +21,33 @@ export interface ProviderLoadEvent {
 }
 
 /**
- * A model that embeds images and text into one shared space
- * (SigLIP/CLIP style). Vectors returned are L2-normalized.
+ * A model with a text tower and one media tower sharing a space
+ * (SigLIP/CLIP for images, CLAP for audio). Vectors are L2-normalized.
  *
  * Implementations load lazily: constructing a provider must be cheap so that
  * commands which never embed (status, inspect) pay nothing.
  */
-export interface VisualEmbeddingProvider {
+export interface EmbeddingProvider {
   readonly space: EmbeddingSpace;
-  embedImages(inputs: ImageInput[]): Promise<Float32Array[]>;
   embedTexts(texts: string[]): Promise<Float32Array[]>;
   /** Downloads/loads weights without embedding anything. */
-  prepare(parts?: { text?: boolean; vision?: boolean }): Promise<void>;
+  prepare(parts?: { text?: boolean; media?: boolean }): Promise<void>;
   /** Whether weights are available locally (no network needed). */
   isCached(): Promise<boolean>;
+}
+
+export interface VisualEmbeddingProvider extends EmbeddingProvider {
+  embedImages(inputs: ImageInput[]): Promise<Float32Array[]>;
+}
+
+export interface AudioEmbeddingProvider extends EmbeddingProvider {
+  embedAudio(inputs: AudioInput[]): Promise<Float32Array[]>;
+}
+
+/** One provider per embedding channel that the enabled processors need. */
+export interface Providers {
+  visual: VisualEmbeddingProvider;
+  audio?: AudioEmbeddingProvider;
 }
 
 export function l2normalize(v: Float32Array): Float32Array {

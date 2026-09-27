@@ -5,16 +5,19 @@ import { extensionOf } from "../../core/paths.ts";
 import { requireIndexedProject } from "../../core/project.ts";
 import type { AssetKind } from "../../core/types.ts";
 import { JSON_SCHEMA_VERSION, type SimilarOutput } from "../../contracts/json.ts";
+import { providerForChannel } from "../../embeddings/registry.ts";
+import type { AudioEmbeddingProvider, VisualEmbeddingProvider } from "../../embeddings/types.ts";
 import { createProcessorRegistry } from "../../processors/registry.ts";
 import { searchByVector } from "../../search/search-service.ts";
 import { IndexStore } from "../../storage/index-store.ts";
-import { displayPath, modelInfo, providerFor, resolveAssetInput } from "../context.ts";
+import { displayPath, modelInfo, providersFor, resolveAssetInput } from "../context.ts";
 import type { Output } from "../io.ts";
 import { describeMetadata, resolveWithin } from "./search-command.ts";
 
 export interface SimilarArgs {
   path: string;
-  kind: AssetKind;
+  /** Undefined: the kind of the reference file. */
+  kind: AssetKind | undefined;
   limit: number;
   within: string | undefined;
 }
@@ -22,13 +25,32 @@ export interface SimilarArgs {
 export async function similarCommand(out: Output, args: SimilarArgs): Promise<number> {
   const started = performance.now();
   const { io } = out;
-  if (args.kind !== "image") throw new AssetdError("USAGE_ERROR", `Similarity for "${args.kind}" assets is not supported yet.`);
   const project = requireIndexedProject({ cwd: io.cwd, projectFlag: out.flags.project, env: io.env });
   const within = resolveWithin(project, io.cwd, args.within);
   const store = IndexStore.open(project.dbPath, { create: false });
   try {
-    const provider = providerFor(project, out);
+    const providers = providersFor(project, out);
     const ref = resolveAssetInput(project, io.cwd, args.path, store);
+    const registry = createProcessorRegistry(project.config);
+    const file = {
+      logicalPath: ref.logical ?? ref.native,
+      nativePath: ref.native,
+      extension: extensionOf(ref.native.replace(/\\/g, "/")),
+      size: 0,
+      modifiedAtMs: 0,
+    };
+    const processor = registry.forFile(file);
+    const channel = processor?.channels[0];
+    const provider = channel ? providerForChannel(providers, channel) : undefined;
+    if (!processor || !channel || !provider) {
+      if (!ref.exists && !(ref.logical && store.getAsset(ref.logical))) throw new AssetdError("PATH_NOT_FOUND", `File not found: ${args.path}`, { path: args.path });
+      throw new AssetdError("NOT_INDEXED", `Unsupported file type for similarity: ${args.path}`, { path: args.path });
+    }
+    const kind = processor.kind;
+    if (args.kind && args.kind !== kind) {
+      throw new AssetdError("USAGE_ERROR", `The reference is ${kind === "audio" ? "an" : "a"} ${kind} file; similarity only compares assets of the same kind.`);
+    }
+
     const record = ref.logical !== null ? store.getAsset(ref.logical) : undefined;
     let vector: Float32Array | undefined;
     let refHash: string | undefined;
@@ -42,29 +64,25 @@ export async function similarCommand(out: Output, args: SimilarArgs): Promise<nu
       }
     }
     if (!vector) {
-      // Not indexed (new file, or a reference image outside the project): embed it now.
+      // Not indexed (new file, or a reference outside the project): embed it now.
       if (!ref.exists) throw new AssetdError("PATH_NOT_FOUND", `File not found: ${args.path}`, { path: args.path });
-      const registry = createProcessorRegistry(project.config);
-      const size = (await fs.stat(ref.native)).size;
-      const file = { logicalPath: ref.logical ?? ref.native, nativePath: ref.native, extension: extensionOf(ref.native.replace(/\\/g, "/")), size, modifiedAtMs: 0 };
-      const processor = registry.forFile(file);
-      if (!processor || !processor.channels.includes("visual")) {
-        throw new AssetdError("NOT_INDEXED", `Unsupported file type for similarity: ${args.path}`, { path: args.path });
-      }
       const data = await fs.readFile(ref.native);
       refHash = hashBuffer(data);
       let processed;
       try {
-        processed = await processor.process({ file, data });
+        processed = await processor.process({ file: { ...file, size: data.byteLength }, data });
       } catch (err) {
         throw new AssetdError("NOT_INDEXED", `Cannot decode ${args.path}: ${(err as Error).message}`, { path: args.path });
       }
-      const request = processed.embeddingRequests.find((r) => r.channel === "visual");
-      if (!request) throw new AssetdError("NOT_INDEXED", `No visual representation for ${args.path}`);
-      [vector] = await provider.embedImages([request.input.image]);
+      const request = processed.embeddingRequests.find((r) => r.channel === channel);
+      if (!request) throw new AssetdError("NOT_INDEXED", `No ${channel} representation for ${args.path}`);
+      [vector] =
+        request.channel === "visual"
+          ? await (provider as VisualEmbeddingProvider).embedImages([request.input.image])
+          : await (provider as AudioEmbeddingProvider).embedAudio([request.input.audio]);
     }
-    const outcome = searchByVector(store, provider.space.id, vector!, {
-      kind: args.kind,
+    const outcome = searchByVector(store, provider.space.id, channel, vector!, {
+      kind,
       limit: args.limit,
       within,
       excludePath: ref.logical ?? undefined,
@@ -73,7 +91,7 @@ export async function similarCommand(out: Output, args: SimilarArgs): Promise<nu
       schemaVersion: JSON_SCHEMA_VERSION,
       command: "similar",
       reference: { path: ref.logical ?? displayPath(project, ref.native), indexed },
-      type: args.kind,
+      type: kind,
       limit: args.limit,
       within: within ?? null,
       model: modelInfo(project, provider),

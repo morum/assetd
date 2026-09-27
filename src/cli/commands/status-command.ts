@@ -4,16 +4,17 @@ import { createIgnoreMatcher } from "../../core/ignore.ts";
 import { extensionOf, isWithinLogical } from "../../core/paths.ts";
 import { resolveExistingProject, type Project } from "../../core/project.ts";
 import { JSON_SCHEMA_VERSION, type StatusOutput } from "../../contracts/json.ts";
-import { createVisualProvider } from "../../embeddings/registry.ts";
+import { createProviders } from "../../embeddings/registry.ts";
 import { createProcessorRegistry, unavailableProcessors } from "../../processors/registry.ts";
 import { IndexStore } from "../../storage/index-store.ts";
-import { displayRoot, modelInfo } from "../context.ts";
+import { displayRoot, modelInfo, providerList } from "../context.ts";
+import type { EmbeddingProvider } from "../../embeddings/types.ts";
 import type { Output } from "../io.ts";
 
 type Staleness = NonNullable<StatusOutput["staleness"]>;
 
 /** Compares the filesystem against the index using stat only (no hashing, no model). */
-async function checkStaleness(project: Project, store: IndexStore, roots: string[], spaceId: string): Promise<Staleness> {
+async function checkStaleness(project: Project, store: IndexStore, roots: string[], providers: EmbeddingProvider[]): Promise<Staleness> {
   const registry = createProcessorRegistry(project.config);
   const { files } = await discoverFiles({
     projectRoot: project.root,
@@ -36,7 +37,7 @@ async function checkStaleness(project: Project, store: IndexStore, roots: string
     }
   }
   for (const p of onDisk.keys()) if (!known.has(p)) result.added++;
-  result.missingEmbeddings = store.countMissingEmbeddings(spaceId, "image");
+  for (const p of providers) result.missingEmbeddings += store.countMissingEmbeddings(p.space.id, p.space.channel === "audio" ? "audio" : "image");
   return result;
 }
 
@@ -71,11 +72,12 @@ export async function statusCommand(out: Output, args: { checkStale: boolean }):
 
   const store = IndexStore.open(project.dbPath, { create: false });
   try {
-    const provider = createVisualProvider(project.config, { env: io.env });
+    const providers = providerList(createProviders(project.config, { env: io.env }));
     const roots = store.listRoots();
     const types = store.countByKind();
     const states = store.countByState();
-    const staleness = args.checkStale ? await checkStaleness(project, store, roots, provider.space.id) : null;
+    const staleness = args.checkStale ? await checkStaleness(project, store, roots, providers) : null;
+    const models = await Promise.all(providers.map(async (p) => ({ ...modelInfo(project, p), cached: await p.isCached() })));
     const stale = staleness ? Object.values(staleness).some((n) => n > 0) : null;
     const indexDir = displayRoot({ ...project, root: project.indexDir }, io.cwd);
     const doc: StatusOutput = {
@@ -91,7 +93,8 @@ export async function statusCommand(out: Output, args: { checkStale: boolean }):
       failures: store.listFailed(50),
       processors: registry!.list().map((p) => ({ id: p.id, version: p.version, enabled: true })),
       unavailableProcessors: unavailableProcessors(project.config),
-      model: { ...modelInfo(project, provider), cached: await provider.isCached() },
+      model: models[0]!,
+      models,
       indexVersion: store.schemaVersion,
       stale,
       staleness,
@@ -104,7 +107,7 @@ export async function statusCommand(out: Output, args: { checkStale: boolean }):
         `Roots:      ${doc.roots.join(", ") || "-"}`,
         `Assets:     ${doc.assets}  ${Object.entries(types).map(([k, v]) => `${k}=${v}`).join(" ")}`,
         `Failed:     ${doc.failed}`,
-        `Model:      ${doc.model!.model} [${doc.model!.dtype}]  ${doc.model!.cached ? "cached" : "not downloaded yet"}`,
+        ...models.map((m, i) => `${i === 0 ? "Models:    " : "           "} ${m.channel}: ${m.model} [${m.dtype}]  ${m.cached ? "cached" : "not downloaded yet"}`),
         `Processors: ${doc.processors.map((p) => `${p.id}@${p.version}`).join(", ") || "-"}`,
         `Last run:   ${doc.lastIndexedAt ?? "-"}`,
       ];

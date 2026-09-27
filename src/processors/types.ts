@@ -1,8 +1,10 @@
 import type { AssetKind, AssetMetadata, EmbeddingChannel, FileInfo } from "../core/types.ts";
-import type { ImageInput } from "../embeddings/types.ts";
+import type { AudioInput, ImageInput } from "../embeddings/types.ts";
 
 /** What a processor asks the indexer to embed. Batched per channel by the indexer. */
-export type EmbeddingRequest = { channel: "visual"; input: { type: "image"; image: ImageInput } };
+export type EmbeddingRequest =
+  | { channel: "visual"; input: { type: "image"; image: ImageInput } }
+  | { channel: "audio"; input: { type: "audio"; audio: AudioInput } };
 
 export interface ProcessedAsset {
   kind: AssetKind;

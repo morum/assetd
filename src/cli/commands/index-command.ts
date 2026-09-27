@@ -9,7 +9,7 @@ import { runIndex } from "../../indexing/indexer.ts";
 import { createProcessorRegistry, unavailableProcessors } from "../../processors/registry.ts";
 import { IndexStore } from "../../storage/index-store.ts";
 import { acquireIndexLock } from "../../storage/lock.ts";
-import { displayRoot, modelInfo, providerFor } from "../context.ts";
+import { displayRoot, modelInfo, providerList, providersFor } from "../context.ts";
 import type { Output } from "../io.ts";
 
 export interface IndexArgs {
@@ -71,14 +71,14 @@ export async function indexCommand(out: Output, args: IndexArgs): Promise<number
     const registry = createProcessorRegistry(project.config);
     const warnings = unavailableProcessors(project.config).map((p) => `processor "${p}" is not available in this version and was skipped`);
     for (const w of warnings) out.warn(w);
-    const visual = providerFor(project, out);
+    const providers = providersFor(project, out);
     const ignore = createIgnoreMatcher(project.root, project.config);
     const stats = await runIndex({
       projectRoot: project.root,
       roots,
       store,
       registry,
-      visual,
+      providers,
       ignore,
       maxFileSizeBytes: project.config.maxFileSizeMb * 1048576,
       retryFailed: args.retryFailed,
@@ -96,7 +96,8 @@ export async function indexCommand(out: Output, args: IndexArgs): Promise<number
       command: "index",
       root: displayRoot(project, io.cwd),
       roots: stats.roots,
-      model: modelInfo(project, visual),
+      model: modelInfo(project, providers.visual),
+      models: providerList(providers).map((p) => modelInfo(project, p)),
       discovered: stats.discovered,
       supported: stats.supported,
       indexed: stats.indexed,

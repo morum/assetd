@@ -49,7 +49,7 @@ export interface CliResult {
   json: any;
 }
 
-export const TEST_ENV: NodeJS.ProcessEnv = { ASSETD_VISUAL_MODEL: "test-hash", ASSETD_OFFLINE: "1" };
+export const TEST_ENV: NodeJS.ProcessEnv = { ASSETD_VISUAL_MODEL: "test-hash", ASSETD_AUDIO_MODEL: "test-audio", ASSETD_OFFLINE: "1" };
 
 /** Runs the CLI in-process with the deterministic test provider. */
 export async function cli(cwd: string, ...argv: string[]): Promise<CliResult> {
@@ -65,4 +65,43 @@ export async function cli(cwd: string, ...argv: string[]): Promise<CliResult> {
   let json: unknown;
   if (argv.includes("--json")) json = JSON.parse(stdout);
   return { code, stdout, stderr, json };
+}
+
+/** Writes a 16-bit PCM WAV: a sine tone, white noise, or silence. */
+export function writeWav(
+  project: TempProject,
+  logical: string,
+  opts: { signal: "sine" | "noise" | "silence"; seconds?: number; sampleRate?: number; channels?: number; frequency?: number },
+): string {
+  const sampleRate = opts.sampleRate ?? 16_000;
+  const channels = opts.channels ?? 1;
+  const frames = Math.round((opts.seconds ?? 1) * sampleRate);
+  const data = Buffer.alloc(frames * channels * 2);
+  let seed = 12345;
+  for (let i = 0; i < frames; i++) {
+    let v = 0;
+    if (opts.signal === "sine") v = 0.5 * Math.sin((2 * Math.PI * (opts.frequency ?? 440) * i) / sampleRate);
+    else if (opts.signal === "noise") {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      v = (seed / 0x7fffffff) * 1.6 - 0.8;
+    }
+    for (let c = 0; c < channels; c++) data.writeInt16LE(Math.round(v * 32767), (i * channels + c) * 2);
+  }
+  const header = Buffer.alloc(44);
+  header.write("RIFF", 0);
+  header.writeUInt32LE(36 + data.length, 4);
+  header.write("WAVEfmt ", 8);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(channels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(sampleRate * channels * 2, 28);
+  header.writeUInt16LE(channels * 2, 32);
+  header.writeUInt16LE(16, 34);
+  header.write("data", 36);
+  header.writeUInt32LE(data.length, 40);
+  const target = project.file(logical);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, Buffer.concat([header, data]));
+  return target;
 }
