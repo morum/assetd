@@ -10,6 +10,8 @@ export interface ContactSheetItem {
   caption: string;
   /** Audio items are shown as a waveform of these (mono) samples. */
   waveform?: Float32Array;
+  /** Encoded image to show instead of reading `nativePath` (e.g. a live 3D render). */
+  image?: Buffer;
 }
 
 export interface ContactSheetOptions {
@@ -114,7 +116,7 @@ async function renderTile(item: ContactSheetItem, thumb: number, board: Buffer):
   if (item.waveform) {
     return sharp(renderWaveform(item.waveform, thumb, thumb), { raw: { width: thumb, height: thumb, channels: 3 } }).png().toBuffer();
   }
-  const data = await fs.readFile(item.nativePath);
+  const data = item.image ?? (await fs.readFile(item.nativePath));
   const meta = await sharp(data, { animated: false }).metadata();
   const small = Math.max(meta.width ?? 0, meta.height ?? 0) < thumb / 2;
   const img = await sharp(data, { animated: false })

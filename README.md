@@ -30,7 +30,9 @@ This release indexes **images** (PNG, JPEG, WebP, GIF, TIFF, AVIF, SVG) with
 SigLIP and **sounds** (WAV, OGG, MP3, FLAC, Opus, M4A, AIFF) with CLAP, decoded
 by bundled WASM decoders (no FFmpeg). 3D models (GLB, glTF with Draco/meshopt,
 OBJ+MTL) are indexed with their metadata (geometry, materials, textures,
-bounds, animations, skeleton). Text and video are planned as separate processors.
+bounds, animations, skeleton) and made searchable by rendering them in software
+and embedding the renders with SigLIP — no GPU, Blender or native binary.
+Text and video are planned as separate processors.
 
 ## Install
 
@@ -73,6 +75,8 @@ re-scans the recorded roots and does the minimum work.
 assetd search "short metallic sword" --limit 5
 assetd search "heavy metal impact" --type audio
 assetd similar ./assets/sfx/door_creak.ogg
+assetd search "low-poly pine tree" --type model3d
+assetd similar ./assets/models/sword.glb --type image   # icons that match a model
 assetd search "health potion icon" --in assets/ui --json
 assetd similar C:\Users\me\Downloads\reference.png --json
 assetd contact-sheet --search "treasure chest" --limit 12
@@ -104,7 +108,8 @@ Zero-config works. To customize, add `assetd.json` at the project root:
   "ignore": ["**/*_backup.*"],
   "respectGitignore": false,
   "processors": { "image": true, "audio": true },
-  "models": { "visual": "siglip-base", "dtype": "q8", "audio": "clap-general" }
+  "models": { "visual": "siglip-base", "dtype": "q8", "audio": "clap-general" },
+  "model3d": { "views": 2 }
 }
 ```
 

@@ -1,0 +1,433 @@
+{
+ "$comment": "Each query lists a case-insensitive regex over the original file basename (without extension). Any matching file counts as relevant.",
+ "queries": [
+  [
+   "an apple",
+   "^apple"
+  ],
+  [
+   "an avocado",
+   "avocado|advocado"
+  ],
+  [
+   "a banana",
+   "banana"
+  ],
+  [
+   "a wooden barrel",
+   "barrel"
+  ],
+  [
+   "a ketchup bottle",
+   "ketchup"
+  ],
+  [
+   "a bowl of soup",
+   "bowl-soup|bowl-broth"
+  ],
+  [
+   "a loaf of bread",
+   "bread|loaf"
+  ],
+  [
+   "broccoli",
+   "broccoli"
+  ],
+  [
+   "a burger",
+   "burger"
+  ],
+  [
+   "a birthday cake",
+   "cake-birthday|^cake$"
+  ],
+  [
+   "a carrot",
+   "carrot"
+  ],
+  [
+   "a wedge of cheese",
+   "^cheese"
+  ],
+  [
+   "cherries",
+   "cherries"
+  ],
+  [
+   "a chocolate bar",
+   "chocolate$|candy-bar"
+  ],
+  [
+   "a coconut",
+   "coconut"
+  ],
+  [
+   "a cookie",
+   "cookie"
+  ],
+  [
+   "a kitchen knife",
+   "cooking-knife|utensil-knife"
+  ],
+  [
+   "a croissant",
+   "croissant"
+  ],
+  [
+   "a cupcake",
+   "cupcake"
+  ],
+  [
+   "a cup of coffee",
+   "cup-coffee|mug"
+  ],
+  [
+   "a cutting board",
+   "cutting-board"
+  ],
+  [
+   "a donut",
+   "donut"
+  ],
+  [
+   "an egg",
+   "^egg"
+  ],
+  [
+   "an eggplant",
+   "eggplant"
+  ],
+  [
+   "a fish",
+   "^fish"
+  ],
+  [
+   "french fries",
+   "^fries"
+  ],
+  [
+   "a frying pan",
+   "frying-pan|^pan$"
+  ],
+  [
+   "a bunch of grapes",
+   "grapes"
+  ],
+  [
+   "a hot dog",
+   "hot-dog|corn-dog"
+  ],
+  [
+   "an ice cream cone",
+   "ice-cream"
+  ],
+  [
+   "a lemon",
+   "lemon"
+  ],
+  [
+   "a lollipop",
+   "lollypop"
+  ],
+  [
+   "sushi",
+   "sushi|maki"
+  ],
+  [
+   "a raw steak",
+   "meat-raw|meat-cooked"
+  ],
+  [
+   "a mushroom",
+   "^mushroom"
+  ],
+  [
+   "an onion",
+   "^onion"
+  ],
+  [
+   "an orange",
+   "^orange"
+  ],
+  [
+   "pancakes",
+   "pancakes"
+  ],
+  [
+   "a pear",
+   "^pear"
+  ],
+  [
+   "a pineapple",
+   "pineapple"
+  ],
+  [
+   "a pizza",
+   "^pizza$"
+  ],
+  [
+   "a dinner plate",
+   "^plate"
+  ],
+  [
+   "a cooking pot",
+   "^pot"
+  ],
+  [
+   "a pumpkin",
+   "pumpkin"
+  ],
+  [
+   "a salad",
+   "salad"
+  ],
+  [
+   "a sandwich",
+   "sandwich|^sub$"
+  ],
+  [
+   "a salt shaker",
+   "shaker"
+  ],
+  [
+   "a soda can",
+   "soda-can|^can"
+  ],
+  [
+   "a strawberry",
+   "strawberry"
+  ],
+  [
+   "a taco",
+   "taco"
+  ],
+  [
+   "a tomato",
+   "^tomato"
+  ],
+  [
+   "a roast turkey",
+   "turkey"
+  ],
+  [
+   "a fork",
+   "fork"
+  ],
+  [
+   "a spoon",
+   "spoon"
+  ],
+  [
+   "a waffle",
+   "waffle"
+  ],
+  [
+   "a watermelon",
+   "watermelon"
+  ],
+  [
+   "a whisk",
+   "whisk"
+  ],
+  [
+   "a bottle of wine",
+   "^wine"
+  ],
+  [
+   "a glass of wine",
+   "glass-wine"
+  ],
+  [
+   "a rolling pin",
+   "rollingPin"
+  ],
+  [
+   "a bathtub",
+   "bathtub"
+  ],
+  [
+   "a bunk bed",
+   "bedBunk"
+  ],
+  [
+   "a double bed",
+   "bedDouble|bedSingle"
+  ],
+  [
+   "a wooden bench",
+   "^bench"
+  ],
+  [
+   "a bookcase",
+   "bookcase"
+  ],
+  [
+   "a cardboard box",
+   "cardboardBox"
+  ],
+  [
+   "a ceiling fan",
+   "ceilingFan"
+  ],
+  [
+   "an office chair",
+   "chairDesk"
+  ],
+  [
+   "a computer keyboard",
+   "computerKeyboard"
+  ],
+  [
+   "a computer monitor",
+   "computerScreen|televisionModern"
+  ],
+  [
+   "a desk",
+   "^desk"
+  ],
+  [
+   "a fridge",
+   "Fridge"
+  ],
+  [
+   "a microwave oven",
+   "Microwave"
+  ],
+  [
+   "a kitchen stove",
+   "Stove"
+  ],
+  [
+   "a floor lamp",
+   "lamp.*Floor"
+  ],
+  [
+   "a laptop",
+   "laptop"
+  ],
+  [
+   "a sofa",
+   "Sofa"
+  ],
+  [
+   "a potted plant",
+   "pottedPlant|plantSmall"
+  ],
+  [
+   "a round rug",
+   "rugRound"
+  ],
+  [
+   "a shower",
+   "shower"
+  ],
+  [
+   "a toilet",
+   "toilet"
+  ],
+  [
+   "a toaster",
+   "toaster"
+  ],
+  [
+   "a vintage television",
+   "televisionVintage"
+  ],
+  [
+   "a washing machine",
+   "washer|dryer"
+  ],
+  [
+   "a staircase",
+   "^stairs"
+  ],
+  [
+   "a teddy bear",
+   "^bear"
+  ],
+  [
+   "a cactus",
+   "cactus"
+  ],
+  [
+   "a campfire",
+   "campfire"
+  ],
+  [
+   "a canoe",
+   "canoe"
+  ],
+  [
+   "a wooden bridge",
+   "bridge"
+  ],
+  [
+   "a pine tree",
+   "tree_pine|tree_cone"
+  ],
+  [
+   "a palm tree",
+   "palm"
+  ],
+  [
+   "a tent",
+   "tent"
+  ],
+  [
+   "a tree stump",
+   "stump"
+  ],
+  [
+   "a large rock",
+   "rock_large"
+  ],
+  [
+   "a sunflower",
+   "flower"
+  ],
+  [
+   "a mushroom in the forest",
+   "^mushroom_"
+  ],
+  [
+   "a log",
+   "^log"
+  ],
+  [
+   "a wooden sign",
+   "^sign"
+  ],
+  [
+   "a statue",
+   "statue"
+  ],
+  [
+   "a field of corn",
+   "crops_corn"
+  ],
+  [
+   "a toy blaster gun",
+   "^blaster"
+  ],
+  [
+   "a hand grenade",
+   "grenade"
+  ],
+  [
+   "a sniper scope",
+   "scope"
+  ],
+  [
+   "a shooting target",
+   "^target"
+  ],
+  [
+   "a foam bullet",
+   "bullet-foam"
+  ],
+  [
+   "a wooden crate",
+   "^crate"
+  ]
+ ]
+}

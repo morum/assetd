@@ -5,6 +5,7 @@ import { requireIndexedProject, type Project } from "../../core/project.ts";
 import type { AssetKind, AssetMetadata } from "../../core/types.ts";
 import { JSON_SCHEMA_VERSION, type SearchOutput } from "../../contracts/json.ts";
 import type { Providers } from "../../embeddings/types.ts";
+import type { AssetdConfig } from "../../core/config.ts";
 import { FUSED_RANKING_ID, rankingId } from "../../search/ranking.ts";
 import { searchAcrossKinds, searchByText, type KindSource } from "../../search/search-service.ts";
 import { IndexStore } from "../../storage/index-store.ts";
@@ -29,9 +30,12 @@ export function resolveWithin(project: Project, cwd: string, within: string | un
 }
 
 /** Searchable kinds and the provider of each one's space. */
-export function kindSources(providers: Providers): KindSource[] {
-  const sources: KindSource[] = [{ kind: "image", provider: providers.visual }];
+export function kindSources(providers: Providers, config: AssetdConfig): KindSource[] {
+  const sources: KindSource[] = [];
+  if (config.processors.image) sources.push({ kind: "image", provider: providers.visual });
   if (providers.audio) sources.push({ kind: "audio", provider: providers.audio });
+  // 3D models are embedded through renders, in the same visual space as images.
+  if (config.processors.model3d) sources.push({ kind: "model3d", provider: providers.visual });
   return sources;
 }
 
@@ -48,6 +52,8 @@ export function describeMetadata(m: AssetMetadata): string {
   const parts: string[] = [];
   if (typeof m.width === "number" && typeof m.height === "number") parts.push(`${m.width}x${m.height}`);
   if (typeof m.durationSeconds === "number") parts.push(`${m.durationSeconds.toFixed(2)}s`);
+  if (typeof m.triangleCount === "number") parts.push(`${m.triangleCount} tris`);
+  if (m.hasAnimations === true) parts.push("animated");
   if (typeof m.format === "string") parts.push(m.format);
   if (m.hasTransparency === true) parts.push("alpha");
   if (m.animated === true) parts.push(`${String(m.frames)} frames`);
@@ -63,7 +69,8 @@ export async function searchCommand(out: Output, args: SearchArgs): Promise<numb
   const store = IndexStore.open(project.dbPath, { create: false });
   try {
     const providers = providersFor(project, out);
-    const sources = kindSources(providers);
+    const sources = kindSources(providers, project.config);
+    if (sources.length === 0) throw new AssetdError("USAGE_ERROR", "No searchable asset kind is enabled in assetd.json.");
     if (args.kind) requireSource(sources, args.kind);
     // Without --type, fuse only when more than one kind actually has assets;
     // an image-only project gets exactly the single-kind ranking.
@@ -85,7 +92,8 @@ export async function searchCommand(out: Output, args: SearchArgs): Promise<numb
       within: within ?? null,
       ranking: single ? rankingId(single.provider.space.channel === "audio" ? "audio" : "visual") : FUSED_RANKING_ID,
       model: modelInfo(project, primary.provider),
-      models: used.map((s) => modelInfo(project, s.provider)),
+      // Kinds can share a space (images and 3D renders both use the visual model): list each model once.
+      models: [...new Map(used.map((s) => [s.provider.space.id, modelInfo(project, s.provider)])).values()],
       candidates: outcome.candidates,
       results: outcome.hits.map((h, i) => ({ rank: i + 1, path: h.path, kind: h.kind, score: h.score, signals: h.signals, metadata: h.metadata })),
       timings: {
@@ -100,7 +108,7 @@ export async function searchCommand(out: Output, args: SearchArgs): Promise<numb
       doc.results.length === 0
         ? "No results."
         : doc.results
-            .map((r) => `${r.score.toFixed(3)}  ${doc.type === "all" ? `${r.kind.padEnd(5)}  ` : ""}${r.path}  ${describeMetadata(r.metadata)}`.trimEnd())
+            .map((r) => `${r.score.toFixed(3)}  ${doc.type === "all" ? `${r.kind.padEnd(7)}  ` : ""}${r.path}  ${describeMetadata(r.metadata)}`.trimEnd())
             .join("\n"),
     );
     return 0;

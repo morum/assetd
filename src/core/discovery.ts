@@ -6,6 +6,8 @@ import type { FileInfo } from "./types.ts";
 export interface DiscoveryIssue {
   path: string;
   error: string;
+  /** The directory does not exist (as opposed to exists but cannot be read). */
+  missing?: boolean;
 }
 
 export interface DiscoveryResult {
@@ -49,7 +51,8 @@ export async function discoverFiles(opts: DiscoveryOptions): Promise<DiscoveryRe
     try {
       entries = await fs.readdir(dirNative, { withFileTypes: true });
     } catch (err) {
-      issues.push({ path: dirLogical || ".", error: (err as Error).message });
+      const code = (err as NodeJS.ErrnoException).code;
+      issues.push({ path: dirLogical || ".", error: (err as Error).message, ...(code === "ENOENT" || code === "ENOTDIR" ? { missing: true } : {}) });
       continue;
     }
     entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));

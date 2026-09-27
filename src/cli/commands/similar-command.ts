@@ -6,13 +6,13 @@ import { requireIndexedProject } from "../../core/project.ts";
 import type { AssetKind } from "../../core/types.ts";
 import { JSON_SCHEMA_VERSION, type SimilarOutput } from "../../contracts/json.ts";
 import { providerForChannel } from "../../embeddings/registry.ts";
-import type { AudioEmbeddingProvider, VisualEmbeddingProvider } from "../../embeddings/types.ts";
+import { embedRequests } from "../../embeddings/requests.ts";
 import { createProcessorRegistry } from "../../processors/registry.ts";
 import { searchByVector } from "../../search/search-service.ts";
 import { IndexStore } from "../../storage/index-store.ts";
 import { displayPath, modelInfo, providersFor, resolveAssetInput } from "../context.ts";
 import type { Output } from "../io.ts";
-import { describeMetadata, resolveWithin } from "./search-command.ts";
+import { describeMetadata, kindSources, resolveWithin } from "./search-command.ts";
 
 export interface SimilarArgs {
   path: string;
@@ -46,9 +46,15 @@ export async function similarCommand(out: Output, args: SimilarArgs): Promise<nu
       if (!ref.exists && !(ref.logical && store.getAsset(ref.logical))) throw new AssetdError("PATH_NOT_FOUND", `File not found: ${args.path}`, { path: args.path });
       throw new AssetdError("NOT_INDEXED", `Unsupported file type for similarity: ${args.path}`, { path: args.path });
     }
-    const kind = processor.kind;
-    if (args.kind && args.kind !== kind) {
-      throw new AssetdError("USAGE_ERROR", `The reference is ${kind === "audio" ? "an" : "a"} ${kind} file; similarity only compares assets of the same kind.`);
+    // Kinds that share the reference's embedding space can be compared directly:
+    // images and 3D models (via renders) both live in the visual space.
+    const kind = args.kind ?? processor.kind;
+    const comparable = kindSources(providers, project.config).filter((s) => s.provider.space.id === provider.space.id).map((s) => s.kind);
+    if (!comparable.includes(kind)) {
+      throw new AssetdError(
+        "USAGE_ERROR",
+        `A ${processor.kind} reference can only be compared with: ${comparable.join(", ")} (they share its embedding space).`,
+      );
     }
 
     const record = ref.logical !== null ? store.getAsset(ref.logical) : undefined;
@@ -76,10 +82,7 @@ export async function similarCommand(out: Output, args: SimilarArgs): Promise<nu
       }
       const request = processed.embeddingRequests.find((r) => r.channel === channel);
       if (!request) throw new AssetdError("NOT_INDEXED", `No ${channel} representation for ${args.path}`);
-      [vector] =
-        request.channel === "visual"
-          ? await (provider as VisualEmbeddingProvider).embedImages([request.input.image])
-          : await (provider as AudioEmbeddingProvider).embedAudio([request.input.audio]);
+      [vector] = await embedRequests(providers, channel, [request]);
     }
     const outcome = searchByVector(store, provider.space.id, channel, vector!, {
       kind,

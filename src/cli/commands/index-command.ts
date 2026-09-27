@@ -81,6 +81,7 @@ export async function indexCommand(out: Output, args: IndexArgs): Promise<number
       providers,
       ignore,
       maxFileSizeBytes: project.config.maxFileSizeMb * 1048576,
+      previewDir: project.previewDir,
       retryFailed: args.retryFailed,
       signal: controller.signal,
       onProgress: (p) => {

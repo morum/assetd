@@ -60,3 +60,6 @@ jobs:
       - run: node dist/cli/main.js inspect test\fixtures\blue_square.png --json
         if: runner.os == 'Windows'
       - run: node dist/cli/main.js contact-sheet --search "shape" --limit 4 --json
+      - run: node dist/cli/main.js search "a hamburger" --type model3d --limit 3 --json
+      - run: node dist/cli/main.js inspect test/fixtures/models/burger.glb --json
+      - run: node dist/cli/main.js similar test/fixtures/models/burger.glb --type image --json

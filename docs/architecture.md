@@ -80,8 +80,23 @@ container and external files itself, so a missing texture becomes a
 `missingResources` entry (with a placeholder) instead of failing the model.
 Both loaders produce the same format-neutral scene (world-space triangles, UVs,
 vertex colors, base color and texture per primitive): metadata is derived from
-it, and preview rendering will draw it. Changes to a model's external
-`.bin`/texture files are not tracked yet: re-index after editing only those.
+it, and the renderer draws it.
+
+Search works through renders. A small software rasterizer
+(`src/render/rasterizer.ts`, pure TypeScript) draws the scene with an
+orthographic camera fitted to the model, a z-buffer, double-sided Lambert
+shading (tolerates flipped normals), base color × texture × vertex color,
+alpha cut-outs, 2× supersampling and a white background, in ~10 ms per
+256 px view. It needs no GPU, OpenGL, Blender or native binary, and produces
+the same pixels on every platform. Two views (configurable: 1, 2, 4) are
+embedded with SigLIP and averaged, so models live in the **same visual space as
+images**: `similar model.glb --type image` and `similar icon.png --type model3d`
+compare them directly. The first view is saved as the model's preview
+(`.asset-index/previews/<contentHash>/preview.png`, shared by identical files,
+pruned with the index) for `inspect` and contact sheets. Numbers:
+[evaluation.md](evaluation.md#3d-models). Changes to a model's external
+`.bin`/texture files are not tracked yet: a model is re-processed only when its
+own file changes.
 
 ### Searching several kinds
 

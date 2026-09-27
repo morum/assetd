@@ -8,7 +8,9 @@ import { channelOfSpace } from "../../embeddings/presets.ts";
 import { createProviders, providerForChannel } from "../../embeddings/registry.ts";
 import { createProcessorRegistry } from "../../processors/registry.ts";
 import { IndexStore } from "../../storage/index-store.ts";
-import { resolveAssetInput } from "../context.ts";
+import { displayPath, resolveAssetInput } from "../context.ts";
+import fs2 from "node:fs";
+import path from "node:path";
 import type { Output } from "../io.ts";
 
 function formatSize(n: number | null): string {
@@ -91,6 +93,19 @@ export async function inspectCommand(out: Output, args: { path: string }): Promi
         doc.error = (err as Error).message;
       }
     }
+    // Derived previews (3D renders) live next to the index, keyed by content hash.
+    if (doc.contentHash) {
+      const dir = path.join(project.previewDir, doc.contentHash);
+      try {
+        doc.previews = fs2
+          .readdirSync(dir)
+          .filter((f) => f.endsWith(".png"))
+          .sort()
+          .map((f) => displayPath(project, path.join(dir, f)));
+      } catch {
+        // No previews for this asset.
+      }
+    }
     doc.otherMatches = store
       .findAssetsByMatchKey(ref.logical)
       .map((r) => r.path)
@@ -127,6 +142,7 @@ export async function inspectCommand(out: Output, args: { path: string }): Promi
         const missingRes = (m.missingResources as string[] | undefined) ?? [];
         if (missingRes.length) lines.push(`Missing:    ${missingRes.join(", ")}`);
       }
+      for (const p of doc.previews) lines.push(`Preview:    ${p}`);
       if (doc.processor) lines.push(`Processor:  ${doc.processor.id}@${doc.processor.version}`);
       for (const e of doc.embeddings) lines.push(`Embedding:  ${e.space} (${e.dimensions}d)${e.current ? "" : " [not current]"}`);
       if (doc.indexedAt) lines.push(`Indexed at: ${doc.indexedAt}`);

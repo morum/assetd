@@ -42,6 +42,11 @@ export const configSchema = z
     maxFileSizeMb: z.number().positive().default(256),
     processors: processorsSchema.default({ image: true, audio: true, model3d: true, video: false, text: false }),
     models: modelsSchema.default({ visual: "siglip-base", audio: "clap-general" }),
+    /** 3D models: renders embedded per model (1 = fastest, 4 = best recall; see docs/evaluation.md). */
+    model3d: z
+      .object({ views: z.union([z.literal(1), z.literal(2), z.literal(4)]).default(2) })
+      .strict()
+      .default({ views: 2 }),
   })
   .strict();
 

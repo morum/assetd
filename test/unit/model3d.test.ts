@@ -4,7 +4,11 @@ import { fileURLToPath } from "node:url";
 import { Document, NodeIO } from "@gltf-transform/core";
 import sharp from "sharp";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { inspectOutputSchema, statusOutputSchema } from "../../src/contracts/json.ts";
+import { contactSheetOutputSchema, inspectOutputSchema, searchOutputSchema, similarOutputSchema, statusOutputSchema } from "../../src/contracts/json.ts";
+import { ExitCode } from "../../src/core/errors.ts";
+import { renderViews, VIEWS } from "../../src/render/rasterizer.ts";
+import type { ModelScene } from "../../src/processors/model3d/model-scene.ts";
+import { writeImage } from "../helpers.ts";
 import { cli, tempProject, type TempProject } from "../helpers.ts";
 
 const FIXTURES = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "models");
@@ -63,7 +67,9 @@ describe("3D model metadata", () => {
     expect(r.json).toMatchObject({ indexed: 3, failed: 0 });
     const glb = inspectOutputSchema.parse((await cli(project.root, "inspect", "models/burger.glb", "--json")).json);
     const obj = inspectOutputSchema.parse((await cli(project.root, "inspect", "models/burger.obj", "--json")).json);
-    expect(glb).toMatchObject({ kind: "model3d", state: "indexed", embeddings: [] });
+    expect(glb).toMatchObject({ kind: "model3d", state: "indexed" });
+    expect(glb.embeddings).toEqual([expect.objectContaining({ channel: "visual", current: true })]);
+    expect(glb.previews).toEqual([`.asset-index/previews/${glb.contentHash}/preview.png`]);
     expect(glb.metadata).toMatchObject({
       format: "glb",
       triangleCount: 294,
@@ -147,5 +153,89 @@ describe("3D model metadata", () => {
     fs.writeFileSync(project.file("bad/broken.gltf"), "{ not json");
     const r = await cli(project.root, "index", "bad", "--json");
     expect(r.json).toMatchObject({ indexed: 0, failed: 2 });
+  });
+});
+
+function cubeScene(color: [number, number, number, number]): ModelScene {
+  const p = [0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1];
+  const idx = [0, 1, 2, 0, 2, 3, 4, 6, 5, 4, 7, 6, 0, 4, 5, 0, 5, 1, 3, 2, 6, 3, 6, 7, 1, 5, 6, 1, 6, 2, 0, 3, 7, 0, 7, 4];
+  return {
+    format: "glb",
+    primitives: [{ positions: new Float32Array(p), indices: new Uint32Array(idx), baseColor: color }],
+    meshCount: 1, nodeCount: 1, materials: [], textures: [], animations: [], jointCount: 0, skinCount: 0,
+    hasMorphTargets: false, hasVertexColors: false, vertexCount: 8, triangleCount: 12, generator: null,
+    extensionsUsed: [], missingResources: [], units: "meters", upAxis: "Y",
+  };
+}
+
+describe("software renderer", () => {
+  it("draws the model centered on a white background, deterministically", async () => {
+    const [a] = await renderViews(cubeScene([1, 0, 0, 1]), [VIEWS.perspective1!], { size: 64 });
+    const [b] = await renderViews(cubeScene([1, 0, 0, 1]), [VIEWS.perspective1!], { size: 64 });
+    expect(Buffer.from(a!.rgb).equals(Buffer.from(b!.rgb))).toBe(true);
+    const px = (x: number, y: number) => Array.from(a!.rgb.subarray((y * 64 + x) * 3, (y * 64 + x) * 3 + 3));
+    expect(px(0, 0)).toEqual([255, 255, 255]);
+    const [r, g, bl] = px(32, 32);
+    expect(r).toBeGreaterThan(90);
+    expect(g).toBeLessThan(40);
+    expect(bl).toBeLessThan(40);
+  });
+
+  it("renders every standard view without throwing", async () => {
+    const out = await renderViews(cubeScene([0, 0, 1, 1]), Object.values(VIEWS), { size: 32, supersample: 1 });
+    expect(out).toHaveLength(Object.keys(VIEWS).length);
+  });
+});
+
+describe("3D search", () => {
+  beforeEach(async () => {
+    copyFixtures("models");
+    await writeGltf("m/crate.glb", { format: "glb" });
+    await writeImage(project, "icons/red.png", "#ff0000");
+    await cli(project.root, "index", "models", "m", "icons");
+  });
+
+  it("searches 3D models by text through their renders", async () => {
+    const doc = searchOutputSchema.parse((await cli(project.root, "search", "burger", "--type", "model3d", "--json")).json);
+    expect(doc).toMatchObject({ type: "model3d", ranking: "visual+lexical/v1" });
+    expect(doc.results.every((r) => r.kind === "model3d" && r.signals.visual !== undefined)).toBe(true);
+    expect(doc.results.map((r) => r.path)).toContain("models/burger.glb");
+    const all = searchOutputSchema.parse((await cli(project.root, "search", "burger", "--json")).json);
+    expect(all.type).toBe("all");
+    expect(all.models).toHaveLength(1); // images and 3D share the visual model
+  });
+
+  it("compares images and 3D models in the shared visual space", async () => {
+    const sameKind = similarOutputSchema.parse((await cli(project.root, "similar", "models/burger.glb", "--json")).json);
+    expect(sameKind.type).toBe("model3d");
+    expect(sameKind.results[0]!.path).toBe("models/burger.obj");
+    const toImages = similarOutputSchema.parse((await cli(project.root, "similar", "models/burger.glb", "--type", "image", "--json")).json);
+    expect(toImages.results.every((r) => r.kind === "image")).toBe(true);
+    const toModels = similarOutputSchema.parse((await cli(project.root, "similar", "icons/red.png", "--type", "model3d", "--json")).json);
+    expect(toModels.results.every((r) => r.kind === "model3d")).toBe(true);
+    expect((await cli(project.root, "similar", "icons/red.png", "--type", "audio", "--json")).code).toBe(ExitCode.USAGE_ERROR);
+  });
+
+  it("re-embeds only 3D models when the configured view count changes", async () => {
+    fs.writeFileSync(project.file("assetd.json"), JSON.stringify({ model3d: { views: 4 } }));
+    const r = await cli(project.root, "index", "--json");
+    expect(r.json).toMatchObject({ indexed: 3, unchanged: 2 }); // 3 models re-rendered; texture + icon untouched
+    const doc = (await cli(project.root, "inspect", "models/burger.glb", "--json")).json;
+    expect(doc.processor.version).toBe("2+perspective1,perspective2,perspective3,perspective4");
+    expect((await cli(project.root, "index", "--json")).json.indexed).toBe(0);
+  });
+
+  it("shows renders in contact sheets and shares previews between identical files", async () => {
+    const sheet = contactSheetOutputSchema.parse((await cli(project.root, "contact-sheet", "models/burger.glb", "models/burger.obj", "--json")).json);
+    expect(sheet.items.map((i) => i.error)).toEqual([null, null]);
+    fs.copyFileSync(project.file("m/crate.glb"), project.file("m/crate copy.glb"));
+    await cli(project.root, "index");
+    const previews = fs.readdirSync(project.file(".asset-index/previews"));
+    const a = (await cli(project.root, "inspect", "m/crate.glb", "--json")).json;
+    const b = (await cli(project.root, "inspect", "m/crate copy.glb", "--json")).json;
+    expect(a.previews).toEqual(b.previews);
+    fs.rmSync(project.file("m"), { recursive: true });
+    await cli(project.root, "index");
+    expect(fs.readdirSync(project.file(".asset-index/previews")).length).toBe(previews.length - 1);
   });
 });

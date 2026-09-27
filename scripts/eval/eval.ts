@@ -23,6 +23,9 @@ import { createProcessorRegistry } from "../../src/processors/registry.ts";
 import { searchByText } from "../../src/search/search-service.ts";
 import { IndexStore } from "../../src/storage/index-store.ts";
 import { createProviders } from "../../src/embeddings/registry.ts";
+import { ProcessorRegistry } from "../../src/processors/registry.ts";
+import { Model3DProcessor } from "../../src/processors/model3d/model3d-processor.ts";
+import { VIEWS, type View } from "../../src/render/rasterizer.ts";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, "..", "..");
@@ -35,9 +38,17 @@ interface Pack {
   sha256: string;
   include: string[];
   exclude?: string;
+  /** Removed from zip paths so relative texture references keep working. */
+  stripPrefix?: string;
 }
 
-const MEDIA = { image: /\.(png|jpe?g|webp|gif|svg)$/i, audio: /\.(wav|ogg|mp3|flac)$/i } as Record<string, RegExp>;
+const MEDIA = {
+  image: /\.(png|jpe?g|webp|gif|svg)$/i,
+  audio: /\.(wav|ogg|mp3|flac)$/i,
+  model3d: /\.(glb|gltf|bin|obj|mtl|png|jpe?g)$/i,
+} as Record<string, RegExp>;
+/** Files that are assets (and get blind names); the rest are resources they reference. */
+const ASSET = { image: MEDIA.image!, audio: MEDIA.audio!, model3d: /\.(glb|gltf|obj)$/i } as Record<string, RegExp>;
 
 function packs(): Pack[] {
   return (JSON.parse(fs.readFileSync(path.join(HERE, "datasets.json"), "utf8")) as { packs: Pack[] }).packs;
@@ -62,7 +73,8 @@ async function fetchPacks(): Promise<void> {
     });
     let n = 0;
     for (const [name, data] of Object.entries(files)) {
-      const target = path.join(DATA, "corpus", pack.kind, pack.id, ...name.split("/"));
+      const rel = pack.stripPrefix && name.startsWith(pack.stripPrefix) ? name.slice(pack.stripPrefix.length) : name;
+      const target = path.join(DATA, "corpus", pack.kind, pack.id, ...rel.split("/"));
       fs.mkdirSync(path.dirname(target), { recursive: true });
       fs.writeFileSync(target, data);
       n++;
@@ -100,6 +112,14 @@ function buildCorpus(kind: AssetKind): Corpus {
   const labels = new Map<string, string[]>();
   for (const file of listFiles(source)) {
     const data = fs.readFileSync(file);
+    if (!ASSET[kind]!.test(file)) {
+      // A resource (texture, .bin): keep its path relative to the pack so references resolve.
+      const rel = path.relative(source, file).split(path.sep).slice(1);
+      const target = path.join(root, "c", ...rel);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      if (!fs.existsSync(target)) fs.writeFileSync(target, data);
+      continue;
+    }
     const logical = `c/${createHash("sha256").update(data).digest("hex").slice(0, 16)}${path.extname(file).toLowerCase()}`;
     const base = path.basename(file, path.extname(file));
     if (!labels.has(logical)) {
@@ -120,13 +140,26 @@ interface QueryResult {
   top: string[];
 }
 
+/** "siglip-base[perspective1,perspective2]" → model spec + 3D view set. */
+function parseSpec(spec: string): { model: string; views: View[] | undefined } {
+  const m = /^(.*?)\[([^\]]+)\]$/.exec(spec);
+  if (!m) return { model: spec, views: undefined };
+  const views = m[2]!.split(",").map((n) => {
+    const v = VIEWS[n.trim()];
+    if (!v) throw new Error(`Unknown view "${n}" (known: ${Object.keys(VIEWS).join(", ")})`);
+    return v;
+  });
+  return { model: m[1]!, views };
+}
+
 function configFor(kind: AssetKind, spec: string): AssetdConfig {
-  const [name, dtype] = spec.split("@");
+  const [name, dtype] = parseSpec(spec).model.split("@");
   const config = defaultConfig();
-  config.processors = { image: kind === "image", audio: kind === "audio", model3d: false, video: false, text: false };
+  config.processors = { image: kind === "image", audio: kind === "audio", model3d: kind === "model3d", video: false, text: false };
   const models = config.models as Record<string, unknown>;
-  models[kind === "image" ? "visual" : "audio"] = name;
-  if (dtype) models[kind === "image" ? "dtype" : "audioDtype"] = dtype;
+  const visual = kind !== "audio";
+  models[visual ? "visual" : "audio"] = name;
+  if (dtype) models[visual ? "dtype" : "audioDtype"] = dtype;
   return config;
 }
 
@@ -137,15 +170,17 @@ function resultFile(kind: AssetKind, spec: string): string {
 async function evaluate(kind: AssetKind, spec: string, corpus: Corpus, queries: [string, string][]) {
   const config = configFor(kind, spec);
   const providers = createProviders(config);
-  const provider = kind === "image" ? providers.visual : providers.audio!;
-  const store = IndexStore.open(path.join(corpus.root, ".asset-index", `${spec.replace(/[^\w.-]/g, "_")}.db`), { create: true });
+  const provider = kind === "audio" ? providers.audio! : providers.visual;
+  const { views } = parseSpec(spec);
+  const registry = kind === "model3d" ? new ProcessorRegistry().register(new Model3DProcessor(views ? { views } : {})) : createProcessorRegistry(config);
+  const store = IndexStore.open(path.join(corpus.root, ".asset-index", `${spec.replace(/[^\w.@-]/g, "_")}.db`), { create: true });
   try {
     const t0 = performance.now();
     const stats = await runIndex({
       projectRoot: corpus.root,
       roots: ["c"],
       store,
-      registry: createProcessorRegistry(config),
+      registry,
       providers,
       ignore: createIgnoreMatcher(corpus.root, config),
       maxFileSizeBytes: 64 * 1048576,
@@ -199,7 +234,8 @@ async function main() {
   if (positionals[0] === "fetch") return fetchPacks();
   if (positionals[0] !== "run") throw new Error("usage: eval.ts fetch | run --kind image|audio --models a,b@fp32");
   const kind = values.kind as AssetKind;
-  const models = (values.models ?? (kind === "image" ? "siglip-base" : "clap-htsat-unfused")).split(",");
+  // Commas separate models, except inside a 3D view list: "siglip-base[perspective1,top],clip-vit-b32".
+  const models = (values.models ?? (kind === "audio" ? "clap-general" : "siglip-base")).split(/,(?![^[]*\])/);
   const queryFile = values.queries ?? path.join(HERE, `${kind}-queries.json`);
   const queries = (JSON.parse(fs.readFileSync(queryFile, "utf8")) as { queries: [string, string][] }).queries;
   const corpus = buildCorpus(kind);

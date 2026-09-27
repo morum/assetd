@@ -79,6 +79,32 @@ suit", "a chess knight"), and objects that exist only as tile fragments
   ones to cosine ≥ 0.9994 (int8 kernel noise, the same as for batched images),
   and retrieval quality stayed within one query.
 
+## 3D models
+
+Corpus: four Kenney kits (food, furniture, nature, blasters) — 709 GLB models,
+blind names, 107 queries ("a canoe", "an office chair", "a toy blaster gun",
+"a pine tree"...). Models are rendered by assetd's software rasterizer and the
+renders embedded with SigLIP base int8; with several views the vectors are
+averaged.
+
+| Views per model | Hit@1 | Hit@5 | Hit@10 | MRR@10 | Index (models/s) |
+|---|---:|---:|---:|---:|---:|
+| 1 (perspective) | 77% | 90% | 96% | 0.827 | 12.9 |
+| **2 (opposite perspectives, default)** | 76% | 92% | 97% | 0.832 | 5.5 |
+| 4 (perspectives around) | 75% | 95% | 98% | 0.824 | 2.8 |
+
+On the food kit alone (200 models, 60 queries) one view already reached 97%
+Hit@5 and the seven "front/back/left/right/top/2 perspectives" views of the
+original plan were the worst and slowest (95%, 1.6 models/s). More views help
+recall at the top-5/10 cut-offs, not the first hit, and cost a SigLIP call each.
+The default is two opposite perspectives (robust to models authored facing
+backwards) at 2.3× the cost of one; `"model3d": { "views": 1 | 2 | 4 }` in
+`assetd.json` trades speed for recall.
+
+Remaining misses are mostly labelling artifacts ("a coconut" → palm trees,
+"a mushroom in the forest" → food-kit mushrooms) and near neighbours ("a raw
+steak" → meat patty, ham).
+
 ## Mixed image + audio search
 
 Checked by hand on the 1,729-file combined corpus (real filenames). What the

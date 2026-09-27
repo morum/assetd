@@ -68,7 +68,7 @@ describe("indexer", () => {
     await seed(2);
     await runIndex(options());
     class ImageV2 extends ImageProcessor {
-      override readonly version = "2";
+      override readonly version: string = "2";
     }
     const stats = await runIndex(options({ registry: new ProcessorRegistry().register(new ImageV2()) }));
     expect(stats.indexed).toBe(2);

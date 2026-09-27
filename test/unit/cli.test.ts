@@ -95,6 +95,15 @@ describe("assetd index", () => {
     expect(r.json.removed).toBe(2);
   });
 
+  it("forgets assets of a recorded root that was deleted", async () => {
+    await writeImage(project, "extra/one.png", "#123456");
+    await cli(project.root, "index", "assets", "extra");
+    fs.rmSync(project.file("extra"), { recursive: true });
+    const r = await cli(project.root, "index", "--json");
+    expect(r.json.removed).toBe(1);
+    expect(r.json.warnings.join(" ")).toMatch(/extra/);
+  });
+
   it("refuses a directory outside the project and a missing directory", async () => {
     await cli(project.root, "index", "assets");
     const missing = await cli(project.root, "index", "nope", "--json");

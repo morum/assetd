@@ -4,6 +4,8 @@ import type { AudioInput, ImageInput } from "../embeddings/types.ts";
 /** What a processor asks the indexer to embed. Batched per channel by the indexer. */
 export type EmbeddingRequest =
   | { channel: "visual"; input: { type: "image"; image: ImageInput } }
+  /** Several renders of one asset; the indexer embeds each and stores their normalized mean. */
+  | { channel: "visual"; input: { type: "views"; images: ImageInput[] } }
   | { channel: "audio"; input: { type: "audio"; audio: AudioInput } };
 
 export interface ProcessedAsset {
@@ -12,6 +14,8 @@ export interface ProcessedAsset {
   description?: string;
   tags?: string[];
   embeddingRequests: EmbeddingRequest[];
+  /** Derived preview images (PNG), stored under .asset-index/previews and deduplicated by content hash. */
+  previews?: { name: string; png: Buffer }[];
 }
 
 /** File contents are read once by the indexer (hashing + decoding share the buffer). */

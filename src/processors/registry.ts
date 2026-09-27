@@ -2,7 +2,7 @@ import type { AssetdConfig } from "../core/config.ts";
 import type { FileInfo } from "../core/types.ts";
 import { AudioProcessor } from "./audio/audio-processor.ts";
 import { ImageProcessor } from "./image/image-processor.ts";
-import { Model3DProcessor } from "./model3d/model3d-processor.ts";
+import { EMBED_VIEW_SETS, Model3DProcessor } from "./model3d/model3d-processor.ts";
 import type { AssetProcessor } from "./types.ts";
 
 export class ProcessorRegistry {
@@ -42,7 +42,7 @@ export function createProcessorRegistry(config: AssetdConfig): ProcessorRegistry
   const registry = new ProcessorRegistry();
   if (config.processors.image) registry.register(new ImageProcessor());
   if (config.processors.audio) registry.register(new AudioProcessor());
-  if (config.processors.model3d) registry.register(new Model3DProcessor());
+  if (config.processors.model3d) registry.register(new Model3DProcessor({ views: EMBED_VIEW_SETS[config.model3d.views] }));
   return registry;
 }
 

@@ -39,6 +39,7 @@ export const INTENT_Z_WEIGHT = 4;
 const INTENT_WORDS: Record<string, readonly string[]> = {
   audio: ["sound", "sounds", "sfx", "audio", "music", "song", "track", "ambience", "ambient", "noise", "voice", "jingle"],
   image: ["icon", "icons", "sprite", "sprites", "image", "images", "picture", "texture", "textures", "tile", "tiles", "illustration", "portrait"],
+  model3d: ["3d", "model", "models", "mesh", "meshes", "glb", "gltf", "obj", "fbx", "prop", "props"],
 };
 
 /** Kinds the query explicitly asks for (empty when it names none, or several). */

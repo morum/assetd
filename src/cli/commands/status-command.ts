@@ -8,13 +8,14 @@ import { createProviders } from "../../embeddings/registry.ts";
 import { createProcessorRegistry, unavailableProcessors } from "../../processors/registry.ts";
 import { IndexStore } from "../../storage/index-store.ts";
 import { displayRoot, modelInfo, providerList } from "../context.ts";
-import type { EmbeddingProvider } from "../../embeddings/types.ts";
+import { kindSources } from "./search-command.ts";
+import type { KindSource } from "../../search/search-service.ts";
 import type { Output } from "../io.ts";
 
 type Staleness = NonNullable<StatusOutput["staleness"]>;
 
 /** Compares the filesystem against the index using stat only (no hashing, no model). */
-async function checkStaleness(project: Project, store: IndexStore, roots: string[], providers: EmbeddingProvider[]): Promise<Staleness> {
+async function checkStaleness(project: Project, store: IndexStore, roots: string[], sources: KindSource[]): Promise<Staleness> {
   const registry = createProcessorRegistry(project.config);
   const { files } = await discoverFiles({
     projectRoot: project.root,
@@ -37,7 +38,7 @@ async function checkStaleness(project: Project, store: IndexStore, roots: string
     }
   }
   for (const p of onDisk.keys()) if (!known.has(p)) result.added++;
-  for (const p of providers) result.missingEmbeddings += store.countMissingEmbeddings(p.space.id, p.space.channel === "audio" ? "audio" : "image");
+  for (const s of sources) result.missingEmbeddings += store.countMissingEmbeddings(s.provider.space.id, s.kind);
   return result;
 }
 
@@ -72,11 +73,12 @@ export async function statusCommand(out: Output, args: { checkStale: boolean }):
 
   const store = IndexStore.open(project.dbPath, { create: false });
   try {
-    const providers = providerList(createProviders(project.config, { env: io.env }));
+    const all = createProviders(project.config, { env: io.env });
+    const providers = providerList(all);
     const roots = store.listRoots();
     const types = store.countByKind();
     const states = store.countByState();
-    const staleness = args.checkStale ? await checkStaleness(project, store, roots, providers) : null;
+    const staleness = args.checkStale ? await checkStaleness(project, store, roots, kindSources(all, project.config)) : null;
     const models = await Promise.all(providers.map(async (p) => ({ ...modelInfo(project, p), cached: await p.isCached() })));
     const stale = staleness ? Object.values(staleness).some((n) => n > 0) : null;
     const indexDir = displayRoot({ ...project, root: project.indexDir }, io.cwd);

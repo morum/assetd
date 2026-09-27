@@ -285,6 +285,10 @@ export class IndexStore {
     this.stmt("UPDATE assets SET size = ?, mtime_ms = ? WHERE path = ?").run(size, mtimeMs, logical);
   }
 
+  listContentHashes(): string[] {
+    return (this.stmt("SELECT DISTINCT content_hash FROM assets WHERE content_hash <> ''").all() as { content_hash: string }[]).map((r) => r.content_hash);
+  }
+
   deleteAsset(logical: string): void {
     this.stmt("DELETE FROM assets WHERE path = ?").run(logical);
   }

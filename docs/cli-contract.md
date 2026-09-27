@@ -68,7 +68,7 @@ date. `assetd ensure-index` is the same operation without arguments.
 `supported` those an enabled processor handles. `unchanged` includes files that
 failed before and did not change (use `--retry-failed` to try them again).
 
-### `assetd search "<query>" [--type image|audio] [--limit 10] [--in <dir>]`
+### `assetd search "<query>" [--type image|audio|model3d] [--limit 10] [--in <dir>]`
 
 Without `--type`, every indexed kind is searched. If only one kind has indexed
 assets (e.g. an image-only project), the output is exactly the single-kind
@@ -107,7 +107,9 @@ search below (`type` is that kind). If several kinds have assets, `type` is
   that a kind with a handful of assets cannot dominate; then
   `score = z + 1 × lexical + 4 × intent`, the same weights for every kind.
   `signals.intent` is 1 for the kind the query explicitly names ("the sound
-  of coins", "a sword icon", "wind ambience"); 0 otherwise.
+  of coins", "a sword icon", "a 3D model of a chair"); 0 otherwise.
+  Images and 3D models share the visual model but are still standardized
+  separately (renders and pictures score on different scales).
   `signals.visual`/`signals.audio` still carry the raw cosine.
 
 Audio results carry `metadata` such as `durationSeconds`, `channels`,
@@ -124,10 +126,13 @@ fail the model, a missing geometry buffer does). Lists are capped at 50.
 
 ### `assetd similar <path> [--limit 10] [--in <dir>]`
 
-`<path>` may be an indexed asset, an unindexed file in the project, or any image
-or sound elsewhere on disk (it is embedded on the fly). Results are of the
-reference's kind (image → images via SigLIP, sound → sounds via CLAP); passing
-a different `--type` is a usage error. The reference itself is excluded;
+`<path>` may be an indexed asset, an unindexed file in the project, or any image,
+sound or 3D model elsewhere on disk (it is embedded on the fly). Results are of
+the reference's kind unless `--type` names another kind **in the same embedding
+space**: images and 3D models (compared through their renders) share the visual
+space, so `similar sword.glb --type image` finds matching icons and
+`similar icon.png --type model3d` finds matching models. Sounds only compare
+with sounds; any other `--type` is a usage error. The reference itself is excluded;
 byte-identical copies are marked `"duplicate": true`.
 
 ```json
@@ -153,6 +158,9 @@ byte-identical copies are marked `"duplicate": true`.
   "previews": [], "indexedAt": "2026-09-27T12:00:05.000Z", "error": null, "otherMatches": []
 }
 ```
+
+`previews` lists derived images for the asset (3D models: a render at
+`.asset-index/previews/<contentHash>/preview.png`, shared by identical files).
 
 `state`: `indexed` · `stale` (file or processor/model changed since indexing) ·
 `failed` · `not-indexed` (exists, supported, not indexed yet: metadata is

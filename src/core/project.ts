@@ -6,6 +6,7 @@ import { toLogicalPath } from "./paths.ts";
 
 export const INDEX_DIR_NAME = ".asset-index";
 export const INDEX_DB_NAME = "index.db";
+export const PREVIEWS_DIR_NAME = "previews";
 
 export interface Project {
   /** Absolute native project root; logical paths are relative to it. */
@@ -13,6 +14,8 @@ export interface Project {
   /** Absolute native path of the index directory. */
   indexDir: string;
   dbPath: string;
+  /** Derived previews: `<previewDir>/<contentHash>/<name>.png`. */
+  previewDir: string;
   config: AssetdConfig;
 }
 
@@ -37,7 +40,7 @@ export function findProjectRoot(start: string): string | null {
 
 export function openProject(root: string, env: NodeJS.ProcessEnv = process.env): Project {
   const indexDir = path.join(root, INDEX_DIR_NAME);
-  return { root, indexDir, dbPath: path.join(indexDir, INDEX_DB_NAME), config: loadConfig(root, env) };
+  return { root, indexDir, dbPath: path.join(indexDir, INDEX_DB_NAME), previewDir: path.join(indexDir, PREVIEWS_DIR_NAME), config: loadConfig(root, env) };
 }
 
 export interface ResolveOptions {

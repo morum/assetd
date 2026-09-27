@@ -1,11 +1,13 @@
 import fs from "node:fs/promises";
+import path from "node:path";
 import { discoverFiles, type DiscoveryIssue } from "../core/discovery.ts";
 import { errorMessage } from "../core/errors.ts";
-import { hashBuffer } from "../core/fs-utils.ts";
+import { hashBuffer, writeFileAtomic } from "../core/fs-utils.ts";
 import type { IgnoreMatcher } from "../core/ignore.ts";
 import { extensionOf, isWithinLogical } from "../core/paths.ts";
 import type { AssetRecord, EmbeddingChannel, FileInfo } from "../core/types.ts";
 import { providerForChannel } from "../embeddings/registry.ts";
+import { embedRequests } from "../embeddings/requests.ts";
 import type { Providers } from "../embeddings/types.ts";
 import type { ProcessorRegistry } from "../processors/registry.ts";
 import type { AssetProcessor, EmbeddingRequest } from "../processors/types.ts";
@@ -28,6 +30,8 @@ export interface IndexRunOptions {
   providers: Providers;
   ignore: IgnoreMatcher;
   maxFileSizeBytes: number;
+  /** Where derived previews are written (`<dir>/<contentHash>/<name>.png`); omit to skip them. */
+  previewDir?: string;
   /** Re-attempt files that failed before even if they did not change. */
   retryFailed?: boolean;
   batchSize?: number;
@@ -65,6 +69,7 @@ interface Prepared {
   processor: AssetProcessor;
   record?: AssetRecord;
   requests?: EmbeddingRequest[];
+  previews?: { name: string; png: Buffer }[];
   /** Unchanged content: only stat info needs refreshing. */
   touchOnly?: boolean;
   /** Disappeared between discovery and reading: treated as removed. */
@@ -83,6 +88,19 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
   });
   await Promise.all(workers);
   return results;
+}
+
+/** Removes preview folders whose content no indexed asset has any more (derived data only). */
+async function prunePreviews(previewDir: string, live: Set<string>): Promise<void> {
+  let entries: string[];
+  try {
+    entries = await fs.readdir(previewDir);
+  } catch {
+    return;
+  }
+  for (const hash of entries) {
+    if (!live.has(hash)) await fs.rm(path.join(previewDir, hash), { recursive: true, force: true }).catch(() => undefined);
+  }
 }
 
 function inputVersion(p: AssetProcessor): string {
@@ -152,8 +170,9 @@ export async function runIndex(opts: IndexRunOptions): Promise<IndexStats> {
   const found = new Set(files.map((f) => f.logicalPath));
 
   // Stale entries: gone from disk, or now ignored/unsupported. Never remove
-  // anything below a directory that could not be read this run.
-  const unreadable = discovery.issues.map((i) => (i.path === "." ? "" : i.path));
+  // anything below a directory that exists but could not be read this run
+  // (permissions, locks); a directory that no longer exists is simply gone.
+  const unreadable = discovery.issues.filter((i) => !i.missing).map((i) => (i.path === "." ? "" : i.path));
   const toRemove = [...existing.keys()].filter(
     (p) => opts.roots.some((r) => isWithinLogical(r, p)) && !found.has(p) && !unreadable.some((u) => isWithinLogical(u, p)),
   );
@@ -242,7 +261,7 @@ export async function runIndex(opts: IndexRunOptions): Promise<IndexStats> {
       if (processed.tags !== undefined) record.tags = processed.tags;
       const missing = processed.embeddingRequests.find((r) => !spaceOf(r.channel));
       if (missing) throw new Error(`No embedding provider configured for channel "${missing.channel}"`);
-      return { file: current, processor, record, requests: processed.embeddingRequests };
+      return { file: current, processor, record, requests: processed.embeddingRequests, ...(processed.previews ? { previews: processed.previews } : {}) };
     } catch (err) {
       return { file: current, processor, record: failRecord(file, processor, `Processing failed: ${errorMessage(err)}`, contentHash) };
     }
@@ -250,11 +269,7 @@ export async function runIndex(opts: IndexRunOptions): Promise<IndexStats> {
 
   /** Embeds one channel's requests: one batched call, then file-by-file to isolate a failure. */
   const embedChannel = async (channel: EmbeddingChannel, items: { p: Prepared; req: EmbeddingRequest }[]) => {
-    const call = (reqs: EmbeddingRequest[]): Promise<Float32Array[]> => {
-      if (channel === "visual") return providers.visual.embedImages(reqs.map((r) => (r as Extract<EmbeddingRequest, { channel: "visual" }>).input.image));
-      if (channel === "audio" && providers.audio) return providers.audio.embedAudio(reqs.map((r) => (r as Extract<EmbeddingRequest, { channel: "audio" }>).input.audio));
-      throw new Error(`No embedding provider configured for channel "${channel}"`);
-    };
+    const call = (reqs: EmbeddingRequest[]): Promise<Float32Array[]> => embedRequests(providers, channel, reqs);
     const vectors = new Map<Prepared, Float32Array>();
     try {
       const out = await call(items.map((i) => i.req));
@@ -288,6 +303,28 @@ export async function runIndex(opts: IndexRunOptions): Promise<IndexStats> {
     for (const p of items) delete p.requests; // release decoded pixels/samples early
   };
 
+  /** Previews are keyed by content hash: identical files share them, rewrites are skipped. */
+  const writePreviews = async (items: Prepared[]) => {
+    if (!opts.previewDir) return;
+    for (const p of items) {
+      if (!p.previews || p.record?.state !== "indexed") continue;
+      const dir = path.join(opts.previewDir, p.record.contentHash);
+      for (const preview of p.previews) {
+        const target = path.join(dir, `${preview.name}.png`);
+        try {
+          await fs.access(target);
+        } catch {
+          try {
+            await writeFileAtomic(target, preview.png);
+          } catch {
+            // A preview is a convenience; failing to write one never fails the asset.
+          }
+        }
+      }
+      delete p.previews;
+    }
+  };
+
   let done = 0;
   for (let i = 0; i < work.length; i += batchSize) {
     if (opts.signal?.aborted) {
@@ -297,6 +334,7 @@ export async function runIndex(opts: IndexRunOptions): Promise<IndexStats> {
     const batch = work.slice(i, i + batchSize);
     const prepared = await mapLimit(batch, concurrency, prepare);
     await embedBatch(prepared);
+    await writePreviews(prepared);
     store.transaction(() => {
       for (const p of prepared) {
         if (p.touchOnly) {
@@ -338,6 +376,7 @@ export async function runIndex(opts: IndexRunOptions): Promise<IndexStats> {
       }
     });
     stats.removed += toRemove.length;
+    if (opts.previewDir) await prunePreviews(opts.previewDir, new Set(store.listContentHashes()));
   }
   stats.elapsedMs = now() - started;
   return stats;

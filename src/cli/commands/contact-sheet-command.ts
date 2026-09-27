@@ -8,6 +8,7 @@ import { searchByText } from "../../search/search-service.ts";
 import { IndexStore } from "../../storage/index-store.ts";
 import { displayPath, providersFor, resolveAssetInput } from "../context.ts";
 import { AUDIO_EXTENSIONS, decodeAndDescribe } from "../../processors/audio/audio-processor.ts";
+import { EMBED_VIEW_SETS, Model3DProcessor, MODEL3D_EXTENSIONS, PREVIEW_NAME } from "../../processors/model3d/model3d-processor.ts";
 import { extensionOf } from "../../core/paths.ts";
 import type { AssetKind } from "../../core/types.ts";
 import { kindSources, requireSource } from "./search-command.ts";
@@ -34,7 +35,7 @@ export async function contactSheetCommand(out: Output, args: ContactSheetArgs): 
   try {
     const entries: { display: string; native: string }[] = [];
     if (args.search !== undefined) {
-      const source = requireSource(kindSources(providersFor(project, out)), args.kind ?? "image");
+      const source = requireSource(kindSources(providersFor(project, out), project.config), args.kind ?? "image");
       const outcome = await searchByText(store, source.provider, args.search, { kind: source.kind, limit: args.limit });
       for (const h of outcome.hits) entries.push({ display: h.path, native: path.join(project.root, ...h.path.split("/")) });
     }
@@ -52,7 +53,22 @@ export async function contactSheetCommand(out: Output, args: ContactSheetArgs): 
         const label = String(i + 1);
         const item: ContactSheetItem = { label, nativePath: e.native, caption: e.display.slice(e.display.lastIndexOf("/") + 1) };
         const extension = extensionOf(e.native.replace(/\\/g, "/"));
-        if ((AUDIO_EXTENSIONS as readonly string[]).includes(extension)) {
+        if ((MODEL3D_EXTENSIONS as readonly string[]).includes(extension)) {
+          // 3D models show their render: the indexed preview, else a live render.
+          const record = store.getAsset(e.display);
+          const cached = record ? path.join(project.previewDir, record.contentHash, `${PREVIEW_NAME}.png`) : null;
+          if (cached && fs.existsSync(cached)) item.nativePath = cached;
+          else {
+            try {
+              const file = { logicalPath: e.display, nativePath: e.native, extension, size: 0, modifiedAtMs: 0 };
+              const processed = await new Model3DProcessor({ views: EMBED_VIEW_SETS[1] }).process({ file, data: await fs.promises.readFile(e.native) });
+              const png = processed.previews?.[0]?.png;
+              if (png) item.image = png;
+            } catch (err) {
+              decodeErrors.set(label, (err as Error).message);
+            }
+          }
+        } else if ((AUDIO_EXTENSIONS as readonly string[]).includes(extension)) {
           try {
             const file = { logicalPath: e.display, nativePath: e.native, extension, size: 0, modifiedAtMs: 0 };
             const decoded = await decodeAndDescribe(file, await fs.promises.readFile(e.native));
