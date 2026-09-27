@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -179,6 +180,18 @@ describe("software renderer", () => {
     expect(r).toBeGreaterThan(90);
     expect(g).toBeLessThan(40);
     expect(bl).toBeLessThan(40);
+  });
+
+  // Reference hashes computed on Linux; CI checks them on Windows too.
+  it.each([
+    [1, "1658a80263cfa227ed366b508a3685e393182ad32598ccc516db81676e432330"],
+    [2, "6d7e0861fa95db6f119acb8005fa1547f2713f8eead81ac9ec87c17408d99129"],
+  ])("renders the burger fixture to the same pixels on every platform (supersample %i)", async (ss, expected) => {
+    const f = path.join(FIXTURES, "burger.glb");
+    const { loadModelScene } = await import("../../src/processors/model3d/model3d-processor.ts");
+    const scene = await loadModelScene({ file: { logicalPath: f, nativePath: f, extension: "glb", size: 0, modifiedAtMs: 0 }, data: fs.readFileSync(f) });
+    const [r] = await renderViews(scene, [VIEWS.perspective1!], { size: 128, supersample: ss });
+    expect(createHash("sha256").update(r!.rgb).digest("hex")).toBe(expected);
   });
 
   it("renders every standard view without throwing", async () => {
