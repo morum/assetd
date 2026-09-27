@@ -48,7 +48,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: .model-cache
-          key: assetd-models-siglip-base-q8-v1
+          key: assetd-models-siglip-base-q8-clap-general-q8-v1
       - run: npm ci
       - run: npm run build
       - run: npm run test:model
