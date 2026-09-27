@@ -156,8 +156,11 @@ Linux, Node 26, 28-thread desktop, 380-image project:
 
 Model loading dominates a cold search, and it is well under a second, so a
 persistent process is not justified. The query cache removes it for repeated
-queries. These numbers were measured on Linux; the Windows path is the same code
-and the same ONNX kernels, but has not been timed on real hardware yet.
+queries. The table was measured on Linux. On GitHub's `windows-latest` runner
+(few vCPUs, cold disk) the same end-to-end flow passes — index, text search,
+similar, inspect with `\`-separated input, contact sheet — with a cold
+`assetd search --json` at ~0.9 s wall time; it has not been profiled on a
+Windows workstation.
 
 ## Directory structure
 
