@@ -17,7 +17,7 @@ const processorsSchema = z
 
 const modelsSchema = z
   .object({
-    /** Visual embedding model: a preset name (see embeddings/presets.ts) or a Hugging Face repo id. */
+    /** Visual model (images, 3D renders): a preset name (see embeddings/presets.ts) or "siglip:<org>/<repo>" / "clip:<org>/<repo>". */
     visual: z.string().min(1).default("siglip-base"),
     /** ONNX weight variant. "q8" is the small default; "fp32" is the most accurate. */
     dtype: z.enum(["q8", "fp16", "fp32"]).optional(),

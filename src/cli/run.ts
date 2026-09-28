@@ -34,13 +34,13 @@ const COMMANDS: Record<string, { options: Options; usage: string; summary: strin
   },
   search: {
     options: SEARCH_OPTIONS,
-    usage: 'assetd search "<query>" [--type image|audio] [--limit 10] [--in <dir>] [--json]',
+    usage: 'assetd search "<query>" [--type image|audio|model3d] [--limit 10] [--in <dir>] [--json]',
     summary: "Semantic text search over indexed assets (all kinds unless --type is given).",
   },
   similar: {
     options: SEARCH_OPTIONS,
-    usage: "assetd similar <path> [--limit 10] [--in <dir>] [--json]",
-    summary: "Find assets similar to an image or sound (indexed or not, inside the project or not).",
+    usage: "assetd similar <path> [--type image|audio|model3d] [--limit 10] [--in <dir>] [--json]",
+    summary: "Find assets similar to an image, sound or 3D model (images and models cross-match).",
   },
   inspect: {
     options: {},
@@ -61,8 +61,8 @@ const COMMANDS: Record<string, { options: Options; usage: string; summary: strin
       type: { type: "string", short: "t" },
       limit: { type: "string", short: "n" },
     },
-    usage: 'assetd contact-sheet <path...> | --search "<query>" [--type image|audio] [--limit 20] [--out sheet.png] [--columns N] [--thumb-size 192] [--json]',
-    summary: "Render candidates (images, or waveforms for sounds) into one labeled grid image.",
+    usage: 'assetd contact-sheet <path...> | --search "<query>" [--type image|audio|model3d] [--limit 20] [--out sheet.png] [--columns N] [--thumb-size 192] [--json]',
+    summary: "Render candidates (images, 3D renders, sound waveforms) into one labeled grid image.",
   },
   models: {
     options: {},

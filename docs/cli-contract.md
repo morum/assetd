@@ -34,7 +34,7 @@ The authoritative schemas are the Zod definitions in `src/contracts/json.ts`.
 |---:|---|---|
 | 0 | `OK` | Success (including `status` when no index exists: see `indexed: false`) |
 | 1 | `INTERNAL_ERROR` | Unexpected failure (set `ASSETD_DEBUG=1` for a stack trace) |
-| 2 | `USAGE_ERROR` | Bad arguments, invalid `assetd.json`, unsupported `--type` |
+| 2 | `USAGE_ERROR` | Bad arguments, invalid `assetd.json`, unsupported `--type`, `similar` across embedding spaces |
 | 3 | `INDEX_NOT_FOUND` | No `.asset-index/` in this directory or any parent |
 | 4 | `PATH_NOT_FOUND` | The given file/directory does not exist or is outside the project |
 | 5 | `NOT_INDEXED` | The file exists but cannot be used (unsupported type, undecodable) |
@@ -56,7 +56,11 @@ date. `assetd ensure-index` is the same operation without arguments.
 {
   "schemaVersion": 1, "command": "index",
   "root": ".", "roots": ["assets"],
-  "model": { "space": "siglip:Xenova/siglip-base-patch16-224:q8:r1", "provider": "siglip", "model": "siglip-base (Xenova/siglip-base-patch16-224)", "dtype": "q8", "dimensions": 768 },
+  "model": { "channel": "visual", "space": "siglip:Xenova/siglip-base-patch16-224:q8:r1", "provider": "siglip", "model": "siglip-base (Xenova/siglip-base-patch16-224)", "dtype": "q8", "dimensions": 768 },
+  "models": [
+    { "channel": "visual", "space": "siglip:Xenova/siglip-base-patch16-224:q8:r1", "...": "..." },
+    { "channel": "audio", "space": "clap:Xenova/larger_clap_general:q8:r1", "...": "..." }
+  ],
   "discovered": 1284, "supported": 1280, "indexed": 43, "unchanged": 1227, "removed": 4, "failed": 10,
   "reusedEmbeddings": 2, "interrupted": false, "elapsedMs": 5120,
   "failures": [{ "path": "assets/ui/broken.png", "error": "Processing failed: ..." }],
@@ -65,7 +69,8 @@ date. `assetd ensure-index` is the same operation without arguments.
 ```
 
 `discovered` counts every file seen under the roots after ignore rules;
-`supported` those an enabled processor handles. `unchanged` includes files that
+`supported` those an enabled processor handles. `model` is the visual model
+(kept for compatibility); `models` lists every enabled channel's model. `unchanged` includes files that
 failed before and did not change (use `--retry-failed` to try them again).
 
 ### `assetd search "<query>" [--type image|audio|model3d] [--limit 10] [--in <dir>]`
@@ -96,9 +101,9 @@ search below (`type` is that kind). If several kinds have assets, `type` is
 
 **Scores** are only comparable **within one result list**.
 
-- Single kind (`ranking` `visual+lexical/v1` or `audio+lexical/v1`):
-  `score = semantic + 0.05 × lexical`. `signals.visual` (images, SigLIP) or
-  `signals.audio` (sounds, CLAP) is the cosine similarity in that model's joint
+- Single kind (`ranking` `visual+lexical/v1` for images and 3D models,
+  `audio+lexical/v1` for sounds): `score = semantic + 0.05 × lexical`.
+  `signals.visual` (images and 3D renders, SigLIP) or `signals.audio` (sounds, CLAP) is the cosine similarity in that model's joint
   text–media space — good SigLIP matches are typically 0.08–0.20, not near 1.0 —
   and `signals.lexical` is the fraction of query words found in the path.
 - Several kinds (`zscore-fusion/v2`): cosines from different models are never
@@ -120,13 +125,13 @@ Audio results carry `metadata` such as `durationSeconds`, `channels`,
 (`uri`, `embedded`, `missing`), `boundingBox` (`min`/`max`, world space),
 `dimensions`, `hasAnimations`, `animations` (`name`, `durationSeconds`),
 `hasSkeleton`, `jointCount`, `hasMorphTargets`, `hasVertexColors`, `units`
-(`"meters"` for glTF, `null` for OBJ), `upAxis`, `generator`, `extensionsUsed`
+(`"meters"` for glTF and FBX, `null` for OBJ, which has no units), `upAxis`, `generator`, `extensionsUsed`
 and `missingResources` (referenced files not found; a missing texture does not
 fail the model, a missing geometry buffer does). FBX adds `sourceVersion`
 (e.g. `"7.4"`) and `sourceUnitScale` (the file's `UnitScaleFactor`; dimensions
 are already converted to meters). Lists are capped at 50.
 
-### `assetd similar <path> [--limit 10] [--in <dir>]`
+### `assetd similar <path> [--type image|audio|model3d] [--limit 10] [--in <dir>]`
 
 `<path>` may be an indexed asset, an unindexed file in the project, or any image,
 sound or 3D model elsewhere on disk (it is embedded on the fly). Results are of
@@ -179,24 +184,35 @@ with either separator; letter case is matched tolerantly when unambiguous.
 {
   "schemaVersion": 1, "command": "status",
   "indexed": true, "root": ".", "indexDir": ".asset-index", "roots": ["assets"],
-  "assets": 1384, "types": { "image": 1384 }, "failed": 3, "failures": [{ "path": "...", "error": "..." }],
-  "processors": [{ "id": "image", "version": "1", "enabled": true }], "unavailableProcessors": [],
-  "model": { "space": "...", "provider": "siglip", "model": "...", "dtype": "q8", "dimensions": 768, "cached": true },
+  "assets": 1726, "types": { "audio": 212, "image": 1384, "model3d": 130 }, "failed": 3, "failures": [{ "path": "...", "error": "..." }],
+  "processors": [
+    { "id": "image", "version": "1", "enabled": true },
+    { "id": "audio", "version": "1", "enabled": true },
+    { "id": "model3d", "version": "2+perspective1,perspective2", "enabled": true }
+  ],
+  "unavailableProcessors": [],
+  "model": { "channel": "visual", "space": "...", "provider": "siglip", "model": "...", "dtype": "q8", "dimensions": 768, "cached": true },
+  "models": [{ "channel": "visual", "...": "...", "cached": true }, { "channel": "audio", "...": "...", "cached": true }],
   "indexVersion": 1, "stale": false,
   "staleness": { "added": 0, "modified": 0, "removed": 0, "missingEmbeddings": 0, "outdatedProcessor": 0 },
   "lastIndexedAt": "2026-09-27T12:00:05.000Z"
 }
 ```
 
-The staleness check only stats files (no hashing, no model). With
+`types` counts indexed assets per kind; `failed` and `failures` cover assets
+that could not be processed. `model` is the visual model (compatibility);
+`models` lists every enabled channel with whether its weights are cached. The
+staleness check only stats files (no hashing, no model); `missingEmbeddings`
+counts assets without a current vector for the configured models. With
 `--no-stale-check`, `stale` and `staleness` are `null`. Without an index:
 `"indexed": false`, exit code 0.
 
-### `assetd contact-sheet <path...> | --search "<query>" [--type image|audio] [--limit 20] [--out file.png] [--columns N] [--thumb-size 192]`
+### `assetd contact-sheet <path...> | --search "<query>" [--type image|audio|model3d] [--limit 20] [--out file.png] [--columns N] [--thumb-size 192]`
 
-Renders the candidates into one PNG grid; sounds are drawn as waveforms with
-their duration in the caption (so an agent that cannot listen still sees
-short hit vs. long loop). Every tile carries a numeric badge
+Renders the candidates into one PNG grid: images as thumbnails, 3D models as
+their render (the indexed preview, else a live render), sounds as waveforms with
+their duration in the caption (so an agent that cannot listen still sees short
+hit vs. long loop). `--search` searches images unless `--type` says otherwise. Every tile carries a numeric badge
 (drawn from a built-in bitmap font, identical on every OS) plus a filename
 caption. Without `--out` the file goes to `.asset-index/contact-sheets/`,
 named after its inputs so identical requests reuse it.
@@ -215,7 +231,8 @@ visual model (compatibility); `models` lists all.
 
 ```json
 { "schemaVersion": 1, "command": "models", "action": "status", "cacheDir": "/home/u/.cache/assetd/models", "offline": false,
-  "model": { "space": "...", "provider": "siglip", "model": "...", "dtype": "q8", "dimensions": 768, "cached": true } }
+  "model": { "channel": "visual", "space": "...", "provider": "siglip", "model": "...", "dtype": "q8", "dimensions": 768, "cached": true },
+  "models": [{ "channel": "visual", "...": "...", "cached": true }, { "channel": "audio", "...": "...", "cached": false }] }
 ```
 
 ## Environment variables

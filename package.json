@@ -1,6 +1,6 @@
 {
   "name": "assetd",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Local-first semantic index and search over project assets, built for AI coding agents and humans.",
   "main": "dist/index.js",
   "scripts": {
@@ -45,7 +45,8 @@
     "dist",
     "skills",
     "docs",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=22.13.0"

@@ -2,25 +2,33 @@
 
 How well does `assetd search` find the right asset from a description, and
 which model should be the default? Measured with `scripts/eval/eval.ts` on
-real game assets, reproducible with:
+real game assets, reproducible with (Node ≥ 22.18, which runs the TypeScript
+harness directly):
 
 ```text
-node scripts/eval/eval.ts fetch
-node scripts/eval/eval.ts run --kind image --models siglip-base,clip-vit-b32
-node scripts/eval/eval.ts run --kind audio --models clap-general,clap-htsat-unfused
+npm run eval -- fetch
+npm run eval -- run --kind image --models siglip-base,clip-vit-b32
+npm run eval -- run --kind audio --models clap-general,clap-htsat-unfused
+npm run eval -- run --kind model3d --models "siglip-base[perspective1],siglip-base[perspective1,perspective2]"
+npm run eval -- run --kind model3d --corpus model3d-fbx --queries scripts/eval/model3d-queries.json
 ```
+
+Model specs are `name[@dtype]`; for 3D, `[view,view,...]` selects the rendered
+views. Results are saved per model in `.eval-data/results/` and indexes are
+reused, so re-running only embeds what changed.
 
 ## Method
 
 - **Corpus**: CC0 packs by Kenney (pinned URLs and SHA-256 in
   `scripts/eval/datasets.json`). Images: animal pack, board-game icons, emotes,
   game icons, platformer art deluxe — 1,361 unique files. Audio: impact,
-  interface, RPG and sci-fi sounds — 353 unique OGG files.
+  interface, RPG and sci-fi sounds — 353 unique OGG files. 3D: food, furniture,
+  nature and blaster kits — 709 models, as GLB and as FBX.
 - **Blind filenames**: every file is copied under its content hash, so path
   words contribute nothing; only the embedding model is measured.
 - **Labels**: each query (`scripts/eval/{image,audio}-queries.json`) has a regex
   over the original filename; any matching file is relevant. 59 image
-  queries, 35 audio queries.
+  queries, 35 audio queries, 107 3D queries.
 - **Metrics**: Hit@k (a relevant file among the first k), MRR@10.
 - **Hardware**: Linux, 28-thread desktop CPU, no GPU, Node 26.
 
