@@ -75,7 +75,22 @@ and a text search skips any kind with no indexed assets.
 ### 3D models
 
 GLB/glTF are read with `@gltf-transform/core` (pure JS) plus the Draco and
-meshopt WASM decoders; OBJ/MTL with a small built-in parser. assetd reads the
+meshopt WASM decoders; OBJ/MTL with a small built-in parser; FBX (binary and
+ASCII, 6.1+) with three.js's pure-JS `FBXLoader`, loaded only when a project has
+FBX files. Around the FBX loader assetd:
+
+- captures texture references instead of letting three.js load images (which
+  needs a DOM), then resolves them itself: the path as written, else the bare
+  file name next to the model and in `Textures/` — FBX often stores the
+  exporting machine's absolute path (`C:\Users\artist\...`); embedded
+  textures are read from the loader's `blob:` URLs;
+- re-indents ASCII FBX by brace depth and drops dangling array commas before
+  parsing: three.js's text parser relies on exact tab indentation and on array
+  lines not ending in ",", and some exporters break both (it silently corrupted
+  UVs and material assignment in two Kenney kits);
+- converts geometry to meters from the file's `UnitScaleFactor` (as Unity's "Use
+  File Scale" does; Z-up files are rotated by the loader) and merges the
+  per-polygon material groups the loader emits into one primitive per material. assetd reads the
 container and external files itself, so a missing texture becomes a
 `missingResources` entry (with a placeholder) instead of failing the model.
 Both loaders produce the same format-neutral scene (world-space triangles, UVs,

@@ -123,6 +123,50 @@
         "Models/GLB format/"
       ],
       "stripPrefix": "Models/GLB format/"
+    },
+    {
+      "id": "food-kit-fbx",
+      "kind": "model3d",
+      "url": "https://kenney.nl/media/pages/assets/food-kit/83086fa91c-1719418518/kenney_food-kit.zip",
+      "sha256": "cdad90853682499b94c9fda2f87678b24bfd8f3264e0ed323f6b6a27fd7c6f6f",
+      "include": [
+        "Models/FBX format/"
+      ],
+      "stripPrefix": "Models/FBX format/",
+      "corpus": "model3d-fbx"
+    },
+    {
+      "id": "furniture-kit-fbx",
+      "kind": "model3d",
+      "url": "https://kenney.nl/media/pages/assets/furniture-kit/440e0608a4-1677580847/kenney_furniture-kit.zip",
+      "sha256": "e67652d0932cee41683f74711c03d3e192a2af9979ef8e6b237711f5482d46b0",
+      "include": [
+        "Models/FBX format/"
+      ],
+      "stripPrefix": "Models/FBX format/",
+      "corpus": "model3d-fbx"
+    },
+    {
+      "id": "nature-kit-fbx",
+      "kind": "model3d",
+      "url": "https://kenney.nl/media/pages/assets/nature-kit/37ac38a37b-1677698939/kenney_nature-kit.zip",
+      "sha256": "fa7974a0d342bfe63c38664ba9f8ec1a4aab8ea25f099bdc56870e33588c4d9d",
+      "include": [
+        "Models/FBX format/"
+      ],
+      "stripPrefix": "Models/FBX format/",
+      "corpus": "model3d-fbx"
+    },
+    {
+      "id": "blaster-kit-fbx",
+      "kind": "model3d",
+      "url": "https://kenney.nl/media/pages/assets/blaster-kit/261d80a716-1753959510/kenney_blaster-kit_2.1.zip",
+      "sha256": "91e3093e95427d59625e7e2ce2d0399b861600160fd0b4ada7714796b67cea8c",
+      "include": [
+        "Models/FBX format/"
+      ],
+      "stripPrefix": "Models/FBX format/",
+      "corpus": "model3d-fbx"
     }
   ]
 }

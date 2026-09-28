@@ -64,8 +64,8 @@ describe("3D model metadata", () => {
     copyFixtures("models");
     const r = await cli(project.root, "index", "models", "--json");
     expect(r.code).toBe(0);
-    // The texture PNG is indexed as an image too.
-    expect(r.json).toMatchObject({ indexed: 3, failed: 0 });
+    // 5 models (burger: glb/obj/fbx, chair: fbx/glb) + the texture PNG, indexed as an image too.
+    expect(r.json).toMatchObject({ indexed: 6, failed: 0 });
     const glb = inspectOutputSchema.parse((await cli(project.root, "inspect", "models/burger.glb", "--json")).json);
     const obj = inspectOutputSchema.parse((await cli(project.root, "inspect", "models/burger.obj", "--json")).json);
     expect(glb).toMatchObject({ kind: "model3d", state: "indexed" });
@@ -85,7 +85,7 @@ describe("3D model metadata", () => {
     expect(obj.metadata).toMatchObject({ format: "obj", triangleCount: 294, materials: ["colormap"], units: null, missingResources: [] });
     expect(obj.metadata.dimensions).toEqual(glb.metadata.dimensions);
     const status = statusOutputSchema.parse((await cli(project.root, "status", "--json")).json);
-    expect(status.types).toMatchObject({ model3d: 2, image: 1 });
+    expect(status.types).toMatchObject({ model3d: 5, image: 1 });
   });
 
   it("applies node transforms and reports animations, skins and embedded textures", async () => {
@@ -221,7 +221,8 @@ describe("3D search", () => {
   it("compares images and 3D models in the shared visual space", async () => {
     const sameKind = similarOutputSchema.parse((await cli(project.root, "similar", "models/burger.glb", "--json")).json);
     expect(sameKind.type).toBe("model3d");
-    expect(sameKind.results[0]!.path).toBe("models/burger.obj");
+    // The other exports of the same burger are its nearest neighbours.
+    expect(sameKind.results.slice(0, 2).map((r) => r.path).sort()).toEqual(["models/burger.fbx", "models/burger.obj"]);
     const toImages = similarOutputSchema.parse((await cli(project.root, "similar", "models/burger.glb", "--type", "image", "--json")).json);
     expect(toImages.results.every((r) => r.kind === "image")).toBe(true);
     const toModels = similarOutputSchema.parse((await cli(project.root, "similar", "icons/red.png", "--type", "model3d", "--json")).json);
@@ -232,7 +233,7 @@ describe("3D search", () => {
   it("re-embeds only 3D models when the configured view count changes", async () => {
     fs.writeFileSync(project.file("assetd.json"), JSON.stringify({ model3d: { views: 4 } }));
     const r = await cli(project.root, "index", "--json");
-    expect(r.json).toMatchObject({ indexed: 3, unchanged: 2 }); // 3 models re-rendered; texture + icon untouched
+    expect(r.json).toMatchObject({ indexed: 6, unchanged: 2 }); // 6 models re-rendered; texture + icon untouched
     const doc = (await cli(project.root, "inspect", "models/burger.glb", "--json")).json;
     expect(doc.processor.version).toBe("2+perspective1,perspective2,perspective3,perspective4");
     expect((await cli(project.root, "index", "--json")).json.indexed).toBe(0);

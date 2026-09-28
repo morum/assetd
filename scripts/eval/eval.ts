@@ -40,15 +40,17 @@ interface Pack {
   exclude?: string;
   /** Removed from zip paths so relative texture references keep working. */
   stripPrefix?: string;
+  /** Corpus name (default: the kind); lets one kind have several corpora, e.g. "model3d-fbx". */
+  corpus?: string;
 }
 
 const MEDIA = {
   image: /\.(png|jpe?g|webp|gif|svg)$/i,
   audio: /\.(wav|ogg|mp3|flac)$/i,
-  model3d: /\.(glb|gltf|bin|obj|mtl|png|jpe?g)$/i,
+  model3d: /\.(glb|gltf|bin|obj|mtl|fbx|png|jpe?g)$/i,
 } as Record<string, RegExp>;
 /** Files that are assets (and get blind names); the rest are resources they reference. */
-const ASSET = { image: MEDIA.image!, audio: MEDIA.audio!, model3d: /\.(glb|gltf|obj)$/i } as Record<string, RegExp>;
+const ASSET = { image: MEDIA.image!, audio: MEDIA.audio!, model3d: /\.(glb|gltf|obj|fbx)$/i } as Record<string, RegExp>;
 
 function packs(): Pack[] {
   return (JSON.parse(fs.readFileSync(path.join(HERE, "datasets.json"), "utf8")) as { packs: Pack[] }).packs;
@@ -74,7 +76,7 @@ async function fetchPacks(): Promise<void> {
     let n = 0;
     for (const [name, data] of Object.entries(files)) {
       const rel = pack.stripPrefix && name.startsWith(pack.stripPrefix) ? name.slice(pack.stripPrefix.length) : name;
-      const target = path.join(DATA, "corpus", pack.kind, pack.id, ...rel.split("/"));
+      const target = path.join(DATA, "corpus", pack.corpus ?? pack.kind, pack.id, ...rel.split("/"));
       fs.mkdirSync(path.dirname(target), { recursive: true });
       fs.writeFileSync(target, data);
       n++;
@@ -104,10 +106,10 @@ interface Corpus {
  * directory and its per-model indexes persist, so re-running only embeds what
  * is new (the normal incremental indexer does the work).
  */
-function buildCorpus(kind: AssetKind): Corpus {
-  const source = path.join(DATA, "corpus", kind);
+function buildCorpus(kind: AssetKind, corpusName: string = kind): Corpus {
+  const source = path.join(DATA, "corpus", corpusName);
   if (!fs.existsSync(source)) throw new Error(`No ${kind} corpus: run \`node scripts/eval/eval.ts fetch\` first`);
-  const root = path.join(DATA, "work", kind);
+  const root = path.join(DATA, "work", corpusName);
   fs.mkdirSync(root, { recursive: true });
   const labels = new Map<string, string[]>();
   for (const file of listFiles(source)) {
@@ -163,8 +165,10 @@ function configFor(kind: AssetKind, spec: string): AssetdConfig {
   return config;
 }
 
+let resultPrefix = "";
+
 function resultFile(kind: AssetKind, spec: string): string {
-  return path.join(DATA, "results", `${kind}-${spec.replace(/[^\w.@-]/g, "_")}.json`);
+  return path.join(DATA, "results", `${resultPrefix || kind}-${spec.replace(/[^\w.@-]/g, "_")}.json`);
 }
 
 async function evaluate(kind: AssetKind, spec: string, corpus: Corpus, queries: [string, string][]) {
@@ -229,7 +233,7 @@ async function evaluate(kind: AssetKind, spec: string, corpus: Corpus, queries: 
 async function main() {
   const { positionals, values } = parseArgs({
     allowPositionals: true,
-    options: { kind: { type: "string", default: "image" }, models: { type: "string" }, queries: { type: "string" } },
+    options: { kind: { type: "string", default: "image" }, corpus: { type: "string" }, models: { type: "string" }, queries: { type: "string" } },
   });
   if (positionals[0] === "fetch") return fetchPacks();
   if (positionals[0] !== "run") throw new Error("usage: eval.ts fetch | run --kind image|audio --models a,b@fp32");
@@ -238,7 +242,9 @@ async function main() {
   const models = (values.models ?? (kind === "audio" ? "clap-general" : "siglip-base")).split(/,(?![^[]*\])/);
   const queryFile = values.queries ?? path.join(HERE, `${kind}-queries.json`);
   const queries = (JSON.parse(fs.readFileSync(queryFile, "utf8")) as { queries: [string, string][] }).queries;
-  const corpus = buildCorpus(kind);
+  const corpusName = (values.corpus as string | undefined) ?? kind;
+  resultPrefix = corpusName;
+  const corpus = buildCorpus(kind, corpusName);
   process.stderr.write(`${kind} corpus: ${corpus.labels.size} unique files, ${queries.length} queries\n`);
   const outDir = path.join(DATA, "results");
   fs.mkdirSync(outDir, { recursive: true });

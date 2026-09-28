@@ -63,3 +63,5 @@ jobs:
       - run: node dist/cli/main.js search "a hamburger" --type model3d --limit 3 --json
       - run: node dist/cli/main.js inspect test/fixtures/models/burger.glb --json
       - run: node dist/cli/main.js similar test/fixtures/models/burger.glb --type image --json
+      - run: node dist/cli/main.js similar test/fixtures/models/burger.fbx --json
+      - run: node dist/cli/main.js inspect test/fixtures/models/chair.fbx --json

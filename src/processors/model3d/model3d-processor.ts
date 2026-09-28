@@ -3,11 +3,12 @@ import type { AssetMetadata, FileInfo } from "../../core/types.ts";
 import type { ImageInput } from "../../embeddings/types.ts";
 import { renderViews, VIEWS, type View } from "../../render/rasterizer.ts";
 import type { AssetProcessor, FileContent, ProcessedAsset } from "../types.ts";
+import { loadFbx } from "./fbx-loader.ts";
 import { loadGltf } from "./gltf-loader.ts";
 import { describeScene, type ModelScene } from "./model-scene.ts";
 import { loadObj } from "./obj-loader.ts";
 
-export const MODEL3D_EXTENSIONS = ["glb", "gltf", "obj"] as const;
+export const MODEL3D_EXTENSIONS = ["glb", "gltf", "obj", "fbx"] as const;
 
 /**
  * Views embedded per model (vectors averaged), by count. On 709 CC0 models,
@@ -24,7 +25,10 @@ const RENDER_SIZE = 256;
 export const PREVIEW_NAME = "preview";
 
 export function loadModelScene(content: FileContent): Promise<ModelScene> {
-  return content.file.extension === "obj" ? loadObj(content.file.nativePath, content.data) : loadGltf(content.file.nativePath, content.data);
+  const { extension, nativePath } = content.file;
+  if (extension === "obj") return loadObj(nativePath, content.data);
+  if (extension === "fbx") return loadFbx(nativePath, content.data);
+  return loadGltf(nativePath, content.data);
 }
 
 export interface Model3DOptions {
@@ -32,7 +36,7 @@ export interface Model3DOptions {
 }
 
 /**
- * 3D models (glTF 2.0 binary/JSON with Draco/meshopt, Wavefront OBJ+MTL).
+ * 3D models (glTF 2.0 binary/JSON with Draco/meshopt, Wavefront OBJ+MTL, FBX).
  * The source file is only read. Each model is rendered in software from a few
  * standard viewpoints; the renders are embedded in the visual (SigLIP) space,
  * so models are searchable by text and comparable with images. The first view

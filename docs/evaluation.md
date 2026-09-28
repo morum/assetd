@@ -101,6 +101,27 @@ The default is two opposite perspectives (robust to models authored facing
 backwards) at 2.3× the cost of one; `"model3d": { "views": 1 | 2 | 4 }` in
 `assetd.json` trades speed for recall.
 
+### FBX
+
+The same 709 models exported as FBX by the same kits (binary FBX 7.7 for food
+and blasters, ASCII FBX 7.3 for furniture and nature) all load, and all 709
+have exactly the triangle count of their GLB counterpart. With the default two
+views:
+
+| Format | Hit@1 | Hit@5 | Hit@10 | MRR@10 | Index (models/s) |
+|---|---:|---:|---:|---:|---:|
+| GLB | 76% | 92% | 97% | 0.832 | 5.5 |
+| FBX | 68% | 87% | 92% | 0.770 | 5.6 |
+
+Renders of FBX and GLB pairs have the same geometry. Two differences come from
+the files, not from reading them: some FBX models face the other way (a 180°
+turn; two opposite views make their averaged vector almost orientation-free),
+and FBX material colors are more saturated. Kenney's official preview images
+match the FBX colors; the GLB exports store the same sRGB numbers in glTF's
+linear color field and render washed out. The lower FBX score most likely comes
+from those colour changes among the distractors (e.g. yellowish cliffs now
+compete with "a wedge of cheese"); this was not verified query by query.
+
 Remaining misses are mostly labelling artifacts ("a coconut" → palm trees,
 "a mushroom in the forest" → food-kit mushrooms) and near neighbours ("a raw
 steak" → meat patty, ham).

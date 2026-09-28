@@ -32,7 +32,7 @@ export interface ModelAnimation {
 }
 
 export interface ModelScene {
-  format: "glb" | "gltf" | "obj";
+  format: "glb" | "gltf" | "obj" | "fbx";
   primitives: ModelPrimitive[];
   /** Mesh definitions (glTF meshes, OBJ objects/groups). */
   meshCount: number;
@@ -53,6 +53,10 @@ export interface ModelScene {
   missingResources: string[];
   units: "meters" | null;
   upAxis: "Y" | null;
+  /** Source format version (FBX: "7.4"). */
+  sourceVersion?: string;
+  /** FBX UnitScaleFactor as stored in the file (1 = centimeters); geometry is converted to meters. */
+  sourceUnitScale?: number;
 }
 
 export interface BoundingBox {
@@ -107,5 +111,7 @@ export function describeScene(scene: ModelScene): Record<string, unknown> {
     generator: scene.generator,
     extensionsUsed: scene.extensionsUsed,
     missingResources: cap(scene.missingResources),
+    ...(scene.sourceVersion !== undefined ? { sourceVersion: scene.sourceVersion } : {}),
+    ...(scene.sourceUnitScale !== undefined ? { sourceUnitScale: scene.sourceUnitScale } : {}),
   };
 }

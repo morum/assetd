@@ -35,4 +35,4 @@ used directly.
 - Prefer a suitable existing asset over creating a duplicate; say which one you chose and why.
 - Do not recurse through asset directories to "look for" images when assetd is available.
 - Exit codes: 0 ok, 2 usage, 3 no index, 4 path not found, 5 unsupported file, 6 model unavailable, 8 index busy. On failure stdout still holds a JSON `error` object.
-- Indexed kinds: images (PNG, JPEG, WebP, GIF, TIFF, AVIF, SVG), audio (WAV, OGG, MP3, FLAC, Opus, M4A, AIFF) and 3D models (GLB, glTF, OBJ). For sounds, `metadata.durationSeconds`, `peakDb` and `rmsDb` help pick short/long or loud/quiet clips.
+- Indexed kinds: images (PNG, JPEG, WebP, GIF, TIFF, AVIF, SVG), audio (WAV, OGG, MP3, FLAC, Opus, M4A, AIFF) and 3D models (GLB, glTF, OBJ, FBX). For sounds, `metadata.durationSeconds`, `peakDb` and `rmsDb` help pick short/long or loud/quiet clips.
